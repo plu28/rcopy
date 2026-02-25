@@ -13,9 +13,15 @@
 #define POLL_SET_SIZE 10
 #define POLL_WAIT_FOREVER -1
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 void setupPollSet();
 void addToPollSet(int socketNumber);
 void removeFromPollSet(int socketNumber);
 int pollCall(int timeInMilliSeconds);
+#ifdef __cplusplus
+}
+#endif
 
 #endif

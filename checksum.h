@@ -1,8 +1,13 @@
-/* Checksum declaration 
+/* Checksum declaration
  * shadows@whitefang.com
  */
 
-unsigned short in_cksum(unsigned short *addr,int len);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+unsigned short in_cksum(unsigned short *addr, int len);
 
-
+#ifdef __cplusplus
+}
+#endif
