@@ -1,0 +1,7 @@
+docs/
+*.o
+*.sh
+*.SYMDEF
+*.dSYM
+*.a
+libcpe464/
