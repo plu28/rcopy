@@ -40,47 +40,47 @@ int pdu::badChecksum() const {
   return 1;
 }
 
-uint32_t pdu::getSeq() const {
+uint32_t pdu::seq() const {
   uint32_t seq_num = 0;
   std::memcpy(&seq_num, pduBuffer.data() + SEQ_OFFSET, sizeof(uint32_t));
   seq_num = ntohl(seq_num);
   return seq_num;
 }
-int pdu::getFlag() const {
+int pdu::flag() const {
   int flag = 0;
   std::memcpy(&flag, pduBuffer.data() + FLAG_OFFSET, sizeof(uint8_t));
   return flag;
 }
 
-uint16_t pdu::getChecksum() const {
+uint16_t pdu::checksum() const {
   uint16_t checksum = 0;
   std::memcpy(&checksum, pduBuffer.data() + CHK_OFFSET, sizeof(uint16_t));
   return checksum;
 }
-int pdu::getPayloadLen() const { return pduBuffer.size() - PDU_HEADER_LEN; }
-int pdu::getPDULen() const { return pduBuffer.size(); }
+int pdu::payloadLen() const { return pduBuffer.size() - PDU_HEADER_LEN; }
+int pdu::PDULen() const { return pduBuffer.size(); }
 
-std::vector<uint8_t> pdu::getPayload() const {
-  std::vector<uint8_t> payload = std::vector<uint8_t>(this->getPayloadLen());
-  memcpy(payload.data(), pduBuffer.data() + PAYLOAD_OFFSET, getPayloadLen());
+std::vector<uint8_t> pdu::payload() const {
+  std::vector<uint8_t> payload = std::vector<uint8_t>(this->payloadLen());
+  memcpy(payload.data(), pduBuffer.data() + PAYLOAD_OFFSET, payloadLen());
   return payload;
 }
 
-std::string pdu::getPayloadStr() const {
-  std::vector<uint8_t> payload = getPayload();
+std::string pdu::payloadStr() const {
+  std::vector<uint8_t> payload = this->payload();
   return std::string(payload.begin(), payload.end());
 }
-std::vector<uint8_t> &pdu::getBuffer() { return pduBuffer; }
+std::vector<uint8_t> &pdu::buffer() { return pduBuffer; }
 
-void pdu::pduResize(int pduLen) { pduBuffer.resize(pduLen); }
+void pdu::resize(int pduLen) { pduBuffer.resize(pduLen); }
 
 // Print overload
 std::ostream &operator<<(std::ostream &os, const pdu &pdu) {
   os << "Checksum: " << (pdu.badChecksum() ? "Fail" : "Pass") << " | ";
-  os << "Sequence Number: " << (pdu.getSeq()) << " | ";
-  os << "Flag: " << (pdu.getFlag()) << " | ";
-  os << "PDU Length: " << (pdu.getPDULen()) << " | ";
-  os << "Payload Length: " << (pdu.getPayloadLen()) << " | \n";
-  os << (pdu.getPayloadStr()) << "\n";
+  os << "Sequence Number: " << (pdu.seq()) << " | ";
+  os << "Flag: " << (pdu.flag()) << " | ";
+  os << "PDU Length: " << (pdu.PDULen()) << " | ";
+  os << "Payload Length: " << (pdu.payloadLen()) << " | \n";
+  os << (pdu.payloadStr()) << "\n";
   return os;
 }

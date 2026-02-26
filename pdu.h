@@ -23,17 +23,17 @@ public:
   pdu();
   pdu(uint8_t *pduBuffer);
   pdu(uint8_t *payload, int payloadLen, uint32_t seq_num, uint8_t flag);
-  uint32_t getSeq() const;
-  int getFlag() const;
-  uint16_t getChecksum() const;
-  std::vector<uint8_t> getPayload() const;
-  std::vector<uint8_t> &getBuffer();
-  int getPayloadLen() const;
-  int getPDULen() const;
+  uint32_t seq() const;
+  int flag() const;
+  uint16_t checksum() const;
+  std::vector<uint8_t> payload() const;
+  std::vector<uint8_t> &buffer();
+  int payloadLen() const;
+  int PDULen() const;
 
-  std::string getPayloadStr() const;
+  std::string payloadStr() const;
   int badChecksum() const;
-  void pduResize(int payloadLen);
+  void resize(int payloadLen);
 
 private:
   std::vector<uint8_t> pduBuffer = std::vector<uint8_t>(MAX_PDU);

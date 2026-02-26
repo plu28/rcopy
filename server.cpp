@@ -37,6 +37,7 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
+// Server receives a connection and passes it on to a child
 void processClient(int socketNum) {
   int pduLen = 0;
   struct sockaddr_in6 client;
@@ -44,10 +45,10 @@ void processClient(int socketNum) {
 
   while (true) {
     pdu recvPdu = pdu();
-    pduLen = safeRecvfrom(socketNum, recvPdu.getBuffer().data(),
-                          recvPdu.getBuffer().size(), 0,
+    pduLen = safeRecvfrom(socketNum, recvPdu.buffer().data(),
+                          recvPdu.buffer().size(), 0,
                           (struct sockaddr *)&client, &clientAddrLen);
-    recvPdu.pduResize(pduLen);
+    recvPdu.resize(pduLen);
 
     printf("Received message from client with ");
     printIPInfo(&client);
@@ -55,7 +56,7 @@ void processClient(int socketNum) {
     std::cout << recvPdu;
 
     // Send back the data
-    safeSendto(socketNum, recvPdu.getBuffer().data(), pduLen, 0,
+    safeSendto(socketNum, recvPdu.buffer().data(), pduLen, 0,
                (struct sockaddr *)&client, clientAddrLen);
   }
 }
