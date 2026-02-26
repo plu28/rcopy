@@ -7,3 +7,5 @@ docs/
 libcpe464/
 rcopy
 server
+*.txt
+
