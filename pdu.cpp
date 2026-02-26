@@ -3,15 +3,14 @@
 
 #include "pdu.h"
 #include "checksum.h"
+#include "safeUtil.h"
+#include <netinet/in.h>
 #include <ostream>
 #include <stdint.h>
 #include <vector>
 #define MAX_PDU 1407
 
 // Create a blank PDU object
-// NOTE: The size of this object is MAX PDU Size
-// After receiving the PDU, resize it using pdu::pduResize(int pduLen) to
-// prevent undefined behavior
 pdu::pdu() {}
 
 // Create a pdu object
@@ -73,6 +72,19 @@ std::string pdu::payloadStr() const {
 std::vector<uint8_t> &pdu::buffer() { return pduBuffer; }
 
 void pdu::resize(int pduLen) { pduBuffer.resize(pduLen); }
+
+int pdu::sendTo(int socketNum, struct sockaddr *destination) {
+  int addrLen = sizeof(struct sockaddr_in6);
+  return safeSendto(socketNum, this->pduBuffer.data(), this->PDULen(), 0,
+                    destination, addrLen);
+}
+
+int pdu::recvFrom(int socketNum, struct sockaddr *source, int *addrLen) {
+  int recvPDULen = safeRecvfrom(socketNum, this->pduBuffer.data(),
+                                this->PDULen(), 0, source, addrLen);
+  pduBuffer.resize(recvPDULen);
+  return recvPDULen;
+}
 
 // Print overload
 std::ostream &operator<<(std::ostream &os, const pdu &pdu) {
