@@ -74,10 +74,10 @@ void talkToServer(int socketNum, struct sockaddr_in6 *server) {
 
     printf("Sending: %s with len: %d\n", payloadBuffer, payloadLen);
     pdu newPdu((uint8_t *)payloadBuffer, payloadLen, sequenceCounter++, 1);
-    newPdu.sendTo(socketNum, (struct sockaddr *)server);
+    newPdu.sendTo(socketNum, server);
 
     pdu recvPdu = pdu();
-    recvPdu.recvFrom(socketNum, (struct sockaddr *)server, &serverAddrLen);
+    recvPdu.recvFrom(socketNum, server, &serverAddrLen);
 
     // print out bytes received
     ipString = ipAddressToString(server);

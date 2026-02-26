@@ -32,6 +32,7 @@ int tcpClientSetup(char *serverName, char *serverPort, int debugFlag);
 int udpServerSetup(int serverPort);
 int setupUdpClientToServer(struct sockaddr_in6 *serverAddress, char *hostName,
                            int serverPort);
+int safeGetUdpSocket();
 
 #ifdef __cplusplus
 }

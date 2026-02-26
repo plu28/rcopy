@@ -2,18 +2,16 @@
 
 #include <cstdint>
 #include <vector>
+#define DEBUG 1
 
-// PDU Flags
-enum Flag {
-  RR = 5,
-  SREJ = 6,
-  CLIENT_INIT = 8,
-  SERVER_INIT = 9,
-  EOF_FLAG = 10,
-  DATA = 16,
-  DATA_SREJ = 17,
-  DATA_TIMEOUT = 18
-};
+#define RR 5
+#define SREJ 6
+#define CLIENT_INIT 8
+#define SERVER_INIT 9
+#define EOF_FLAG 10
+#define DATA 16
+#define DATA_SREJ 17
+#define DATA_TIMEOUT 18
 
 #define MAX_PDU 1407
 #define MAX_BUFFER 1400
@@ -27,6 +25,7 @@ public:
   pdu();
   pdu(uint8_t *pduBuffer);
   pdu(uint8_t *payload, int payloadLen, uint32_t seq_num, uint8_t flag);
+  pdu(int payload, uint32_t seq_num, uint8_t flag);
 
   uint32_t seq() const;
   int flag() const;
@@ -37,11 +36,12 @@ public:
   int payloadLen() const;
   int PDULen() const;
   std::string payloadStr() const;
+  int payloadInt() const;
 
   int badChecksum() const;
   void resize(int payloadLen);
-  int sendTo(int socketNum, struct sockaddr *destination);
-  int recvFrom(int socketNum, struct sockaddr *source, int *addrLen);
+  int sendTo(int socketNum, struct sockaddr_in6 *destination);
+  int recvFrom(int socketNum, struct sockaddr_in6 *source, int *addrLen);
 
 private:
   std::vector<uint8_t> pduBuffer = std::vector<uint8_t>(MAX_PDU);
