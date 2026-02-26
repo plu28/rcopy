@@ -2,6 +2,7 @@
 /* By Hugh Smith	4/1/2017	*/
 
 #include <arpa/inet.h>
+#include <iostream>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,10 +14,8 @@
 #include "cpe464.h"
 #include "gethostbyname.h"
 #include "networks.h"
-#include "pduUtil.h"
+#include "pdu.h"
 #include "safeUtil.h"
-
-#define MAXBUF 80
 
 void processClient(int socketNum);
 int checkArgs(int argc, char *argv[], float *errRate);
@@ -40,23 +39,24 @@ int main(int argc, char *argv[]) {
 
 void processClient(int socketNum) {
   int pduLen = 0;
-  char pduBuffer[MAXBUF + 1 + PDU_HEADER_LEN];
   struct sockaddr_in6 client;
   int clientAddrLen = sizeof(client);
 
-  pduBuffer[0] = '\0';
-  while (pduBuffer[0] != '.') {
-    pduLen = safeRecvfrom(socketNum, pduBuffer, MAXBUF + 1 + PDU_HEADER_LEN, 0,
+  while (true) {
+    pdu recvPdu = pdu();
+    pduLen = safeRecvfrom(socketNum, recvPdu.getBuffer().data(),
+                          recvPdu.getBuffer().size(), 0,
                           (struct sockaddr *)&client, &clientAddrLen);
+    recvPdu.pduResize(pduLen);
 
     printf("Received message from client with ");
     printIPInfo(&client);
     printf("\nPDU From Client:\n");
-    printPDU((uint8_t *)pduBuffer, pduLen);
+    std::cout << recvPdu;
 
     // Send back the data
-    safeSendto(socketNum, pduBuffer, pduLen, 0, (struct sockaddr *)&client,
-               clientAddrLen);
+    safeSendto(socketNum, recvPdu.getBuffer().data(), pduLen, 0,
+               (struct sockaddr *)&client, clientAddrLen);
   }
 }
 

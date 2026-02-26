@@ -1,7 +1,9 @@
 // Client side - UDP Code
 // By Hugh Smith	4/1/2017
 
+#include "pdu.h"
 #include <fcntl.h>
+#include <iostream>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -18,12 +20,9 @@
 #include "cpe464.h"
 #include "gethostbyname.h"
 #include "networks.h"
-#include "pduUtil.h"
 #include "safeUtil.h"
 
-#define MAXBUF 80
 #define MAX_FILENAMELEN 100
-#define MAX_BUFFER 1400
 #define MAX_WINDOW 230
 
 typedef struct command_params_t {
@@ -66,11 +65,7 @@ void talkToServer(int socketNum, struct sockaddr_in6 *server) {
   int serverAddrLen = sizeof(struct sockaddr_in6);
   char *ipString = NULL;
   int payloadLen = 0;
-  int pduLen = 0;
-  char payloadBuffer[MAXBUF + 1];
-  char pduBuffer[MAXBUF + 1 + PDU_HEADER_LEN];
-
-  char recvPDUBuffer[MAXBUF + 1 + PDU_HEADER_LEN];
+  char payloadBuffer[MAX_BUFFER + 1];
   int recvPDULen = 0;
 
   payloadBuffer[0] = '\0';
@@ -78,22 +73,23 @@ void talkToServer(int socketNum, struct sockaddr_in6 *server) {
     payloadLen = readFromStdin(payloadBuffer);
 
     printf("Sending: %s with len: %d\n", payloadBuffer, payloadLen);
-    pduLen = createPDU((uint8_t *)pduBuffer, sequenceCounter++, 1,
-                       (uint8_t *)payloadBuffer, payloadLen);
+    pdu newPdu((uint8_t *)payloadBuffer, payloadLen, sequenceCounter++, 1);
 
-    safeSendto(socketNum, pduBuffer, pduLen, 0, (struct sockaddr *)server,
-               serverAddrLen);
+    safeSendto(socketNum, newPdu.getBuffer().data(), newPdu.getPDULen(), 0,
+               (struct sockaddr *)server, serverAddrLen);
 
-    recvPDULen =
-        safeRecvfrom(socketNum, recvPDUBuffer, MAXBUF + 1 + PDU_HEADER_LEN, 0,
-                     (struct sockaddr *)server, &serverAddrLen);
+    pdu recvPdu = pdu();
+    recvPDULen = safeRecvfrom(socketNum, recvPdu.getBuffer().data(),
+                              recvPdu.getBuffer().size(), 0,
+                              (struct sockaddr *)server, &serverAddrLen);
+    recvPdu.pduResize(recvPDULen);
 
     // print out bytes received
     ipString = ipAddressToString(server);
     printf("Server with ip: %s and port %d said it received a pdu\n\nPDU From "
            "Server:\n",
            ipString, ntohs(server->sin6_port));
-    printPDU((uint8_t *)recvPDUBuffer, recvPDULen);
+    std::cout << recvPdu;
   }
 }
 
@@ -104,7 +100,7 @@ int readFromStdin(char *buffer) {
   // Important you don't input more characters than you have space
   buffer[0] = '\0';
   printf("Enter data: ");
-  while (inputLen < (MAXBUF - 1) && aChar != '\n') {
+  while (inputLen < (MAX_BUFFER - 1) && aChar != '\n') {
     aChar = getchar();
     if (aChar != '\n') {
       buffer[inputLen] = aChar;
