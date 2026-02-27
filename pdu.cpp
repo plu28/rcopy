@@ -3,15 +3,26 @@
 
 #include "pdu.h"
 #include "checksum.h"
+#include "gethostbyname.h"
 #include "safeUtil.h"
+#include <iostream>
 #include <netinet/in.h>
 #include <ostream>
 #include <stdint.h>
 #include <vector>
 #define MAX_PDU 1407
 
-// Blank PDU (usually for receiving)
-pdu::pdu() {}
+// Creating a pdu based on data from a socket
+pdu::pdu(int socket, struct sockaddr_in6 *source, int *addrLen) {
+  int recvPDULen = safeRecvfrom(socket, this->pduBuffer.data(), this->PDULen(),
+                                0, (struct sockaddr *)source, addrLen);
+  pduBuffer.resize(recvPDULen);
+  if (DEBUG) {
+    printf("RECEIVED A NEW PDU FROM ");
+    printIPInfo(source);
+    std::cout << *this << std::endl;
+  }
+}
 
 // PDU with a regular payload
 pdu::pdu(uint8_t *payload, int payloadLen, uint32_t seq_num, uint8_t flag) {
@@ -28,6 +39,8 @@ pdu::pdu(uint8_t *payload, int payloadLen, uint32_t seq_num, uint8_t flag) {
 
   uint16_t checksum = in_cksum((uint16_t *)pduBuffer.data(), pduBuffer.size());
   std::memcpy(pduBuffer.data() + CHK_OFFSET, &checksum, sizeof(uint16_t));
+  if (DEBUG)
+    std::cout << "\nCREATED PDU WITH REGULAR PAYLOAD\n" << *this << std::endl;
 }
 // PDU with an integer payload (for SREJ, RR, and init response)
 pdu::pdu(int payload, uint32_t seq_num, uint8_t flag) {
@@ -44,6 +57,8 @@ pdu::pdu(int payload, uint32_t seq_num, uint8_t flag) {
 
   uint16_t checksum = in_cksum((uint16_t *)pduBuffer.data(), pduBuffer.size());
   std::memcpy(pduBuffer.data() + CHK_OFFSET, &checksum, sizeof(uint16_t));
+  if (DEBUG)
+    std::cout << "\nCREATED PDU WITH INTEGER PAYLOAD\n" << *this << std::endl;
 }
 
 // Returns 1 if checksum fails
@@ -100,17 +115,15 @@ std::vector<uint8_t> &pdu::buffer() { return pduBuffer; }
 void pdu::resize(int pduLen) { pduBuffer.resize(pduLen); }
 
 int pdu::sendTo(int socketNum, struct sockaddr_in6 *destination) {
+  if (DEBUG) {
+    printf("SENDING PDU TO");
+    printIPInfo(destination);
+    std::cout << *this << std::endl;
+    ;
+  }
   int addrLen = sizeof(struct sockaddr_in6);
   return safeSendto(socketNum, this->pduBuffer.data(), this->PDULen(), 0,
                     (struct sockaddr *)destination, addrLen);
-}
-
-int pdu::recvFrom(int socketNum, struct sockaddr_in6 *source, int *addrLen) {
-  int recvPDULen =
-      safeRecvfrom(socketNum, this->pduBuffer.data(), this->PDULen(), 0,
-                   (struct sockaddr *)source, addrLen);
-  pduBuffer.resize(recvPDULen);
-  return recvPDULen;
 }
 
 // Print overload
@@ -126,6 +139,9 @@ std::ostream &operator<<(std::ostream &os, const pdu &pdu) {
   case (CLIENT_INIT):
     packetType = "CLIENT INIT";
     break;
+  case (SERVER_INIT):
+    packetType = "SERVER INIT";
+    break;
   case (EOF_FLAG):
     packetType = "EOF";
     break;
@@ -139,12 +155,12 @@ std::ostream &operator<<(std::ostream &os, const pdu &pdu) {
     packetType = "DATA TIMEOUT";
     break;
   default:
-    packetType = "Default (Bad)";
+    packetType = "Default";
     break;
   }
   os << "Checksum: " << (pdu.badChecksum() ? "Fail" : "Pass") << " | ";
   os << "Sequence Number: " << (pdu.seq()) << " | ";
-  os << "Flag: " << packetType << "(" << pdu.flag() << ")" << " | ";
+  os << "Flag: " << packetType << " (" << pdu.flag() << ")" << " | ";
   os << "PDU Length: " << (pdu.PDULen()) << " | ";
   os << "Payload Length: " << (pdu.payloadLen()) << " | \n";
   for (uint8_t byte : pdu.payload()) {

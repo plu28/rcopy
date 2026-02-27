@@ -16,8 +16,9 @@
 #include "gethostbyname.h"
 #include "networks.h"
 #include "pdu.h"
-#include "safeUtil.h"
+
 #define START_SEQ_NUM 200
+#define RETRY_LIM 10
 enum State {
   FILENAME,
   SEND_DATA,
@@ -31,11 +32,14 @@ static float errRate = 0;
 
 void processServer(int socketNum);
 void processClient(struct sockaddr_in6 *client, pdu initPDU);
-std::ifstream processInitPDU(pdu initPDU);
+std::ifstream processInitPDU(pdu initPDU, int *bufferSize);
 void handleZombies(int sig);
 int checkArgs(int argc, char *argv[]);
 
-State checkFilename(int socket, struct sockaddr_in6 *client);
+State checkFilename(int socket, struct sockaddr_in6 *client,
+                    std::ifstream &file, int *seq_num);
+State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
+               int *seqNum, int bufferSize);
 
 int main(int argc, char *argv[]) {
   int socketNum = 0;
@@ -62,9 +66,7 @@ void processServer(int socketNum) {
   signal(SIGCHLD, handleZombies);
 
   while (true) {
-    pdu initPDU = pdu();
-    initPDU.recvFrom(socketNum, &client, &clientAddrLen);
-
+    pdu initPDU = pdu(socketNum, &client, &clientAddrLen);
     if (DEBUG) {
       printIPInfo(&client);
       std::cout << initPDU;
@@ -79,28 +81,32 @@ void processServer(int socketNum) {
 
       if (pid == 0) {
         close(socketNum); // Child doesn't need parents socket
-        std::cout << "Child forked with pid: " << pid << std::endl;
         processClient(&client, initPDU);
         exit(0);
+      } else {
+        std::cout << "\nChild forked with pid: " << pid << std::endl;
       }
     }
   }
 }
 
-// Where the good stuff happens
+// Child responsible for handling data
 void processClient(struct sockaddr_in6 *client, pdu initPDU) {
   // Get a new socket and setup error
   int socket = safeGetUdpSocket();
   sendErr_init(errRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
-  std::ifstream file = processInitPDU(initPDU);
+  int bufferSize = 0;
+  std::ifstream file = processInitPDU(initPDU, &bufferSize);
 
   State state = FILENAME;
-  uint32_t seq_num = START_SEQ_NUM;
+  int seqNum = START_SEQ_NUM;
   while (state != DONE) {
     switch (state) {
     case FILENAME:
+      state = checkFilename(socket, client, file, &seqNum);
       break;
     case SEND_DATA:
+      state = sendData(socket, client, file, &seqNum, bufferSize);
       break;
     case WAIT_ON_ACK:
       break;
@@ -121,20 +127,27 @@ void processClient(struct sockaddr_in6 *client, pdu initPDU) {
   }
 }
 
-State checkFilename(int socket, struct sockaddr_in6 *client, std::ifstream file,
-                    int *seq_num) {
+// Check if the file is accessible
+State checkFilename(int socket, struct sockaddr_in6 *client,
+                    std::ifstream &file, int *seqNum) {
   if (!file) {
     // Bad file
-    pdu badFilenamePDU = pdu(1, (*seq_num)++, SERVER_INIT);
+    printf("BAD FILE\n");
+    pdu badFilenamePDU = pdu(1, (*seqNum)++, SERVER_INIT);
     badFilenamePDU.sendTo(socket, client);
     return DONE;
   } else {
     // Good file
-    pdu goodFilenamePDU = pdu(0, (*seq_num)++, SERVER_INIT);
+    printf("GOOD FILE\n");
+    pdu goodFilenamePDU = pdu(0, (*seqNum)++, SERVER_INIT);
     goodFilenamePDU.sendTo(socket, client);
     return SEND_DATA;
   }
 }
+
+// Send a buffers worth of data
+State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
+               int *seqNum, int bufferSize) {}
 
 int checkArgs(int argc, char *argv[]) {
   // Checks args, returns port number, sets errRate
@@ -164,9 +177,11 @@ std::ifstream processInitPDU(pdu initPDU, int *bufferSize) {
   std::string filename;
   int filenameLen = initPDU.payloadLen() - sizeof(int);
   filename.resize(filenameLen);
-  std::memcpy(filename.data(), initPDU.payload().data() + sizeof(int),
+  std::memcpy(&filename[0], initPDU.payload().data() + sizeof(int),
               filenameLen);
-  std::ifstream file(filename);
+  // std::cout << "FILENAME: " << filename << "| FILENAME LEN: " << filenameLen
+  //           << std::endl;
+  std::ifstream file(filename, std::ios::binary);
   return file;
 }
 

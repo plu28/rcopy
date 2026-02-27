@@ -1,2 +1,9 @@
 David Voronov
 Lab Section: 3pm
+
+Design Decisions:
+Initial Filename/Buffer Size Format:
+| 4 bytes Buffer Size | Null terminated filename
+
+
+A FLAG = 9 (response to filename from server) is good if the payload starts with the integer 0, is bad if it has the integer 1.

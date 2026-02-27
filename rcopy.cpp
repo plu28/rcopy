@@ -3,6 +3,7 @@
 
 #include "pdu.h"
 #include <fcntl.h>
+#include <fstream>
 #include <iostream>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -18,12 +19,16 @@
 #include <unistd.h>
 
 #include "cpe464.h"
-#include "gethostbyname.h"
 #include "networks.h"
+#include "pollLib.h"
 #include "safeUtil.h"
 
 #define MAX_FILENAMELEN 100
+#define INIT_PAYLOAD_LEN 104
 #define MAX_WINDOW 230
+#define RETRY_LIM 10
+#define MS_RESEND 1000     // 1 second to resend
+#define MS_TERMINATE 10000 // 10 seconds to die
 
 typedef struct command_params_t {
   char from_file[MAX_FILENAMELEN];
@@ -35,80 +40,108 @@ typedef struct command_params_t {
   uint32_t port;
 } command_params;
 
-void talkToServer(int socketNum, struct sockaddr_in6 *server);
-int readFromStdin(char *buffer);
-void checkArgs(int argc, char *argv[]);
+enum State { CONNECTION, RECV_DATA, DONE };
 
-static uint32_t sequenceCounter = 0;
+// int readFromStdin(char *buffer);
+void checkArgs(int argc, char *argv[]);
+void processFile();
+State establishConnection(int socketNum, sockaddr_in6 *server,
+                          std::ofstream &outfile);
+
+static uint32_t seq_num = 0;
 static command_params cp;
 
-// Just set things up
 int main(int argc, char *argv[]) {
-  int socketNum = 0;
-  struct sockaddr_in6 server; // Supports 4 and 6 but requires IPv6 struct
-  float errRate = 0;
 
   checkArgs(argc, argv);
 
-  sendErr_init(errRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
-
-  socketNum = setupUdpClientToServer(&server, cp.host_name, cp.port);
-
-  talkToServer(socketNum, &server);
-
-  close(socketNum);
+  processFile();
 
   return 0;
 }
 
-void talkToServer(int socketNum, struct sockaddr_in6 *server) {
-  int serverAddrLen = sizeof(struct sockaddr_in6);
-  char *ipString = NULL;
-  int payloadLen = 0;
-  char payloadBuffer[MAX_BUFFER + 1];
-  int recvPDULen = 0;
+void processFile() {
+  struct sockaddr_in6 server; // Supports 4 and 6 but requires IPv6 struct
+  int socketNum = setupUdpClientToServer(&server, cp.host_name, cp.port);
 
-  payloadBuffer[0] = '\0';
-  while (payloadBuffer[0] != '.') {
-    payloadLen = readFromStdin(payloadBuffer);
+  setupPollSet();
+  addToPollSet(socketNum);
+  sendErr_init(cp.error_rate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
+  std::ofstream outfile;
 
-    printf("Sending: %s with len: %d\n", payloadBuffer, payloadLen);
-    pdu newPdu((uint8_t *)payloadBuffer, payloadLen, sequenceCounter++, 1);
-    newPdu.sendTo(socketNum, server);
-
-    pdu recvPdu = pdu();
-    recvPdu.recvFrom(socketNum, server, &serverAddrLen);
-
-    // print out bytes received
-    ipString = ipAddressToString(server);
-    printf("Server with ip: %s and port %d said it received a pdu\n\nPDU From "
-           "Server:\n",
-           ipString, ntohs(server->sin6_port));
-    std::cout << recvPdu;
+  State state = CONNECTION;
+  while (state != DONE) {
+    switch (state) {
+    case CONNECTION:
+      state = establishConnection(socketNum, &server, outfile);
+      break;
+    case RECV_DATA:
+      break;
+    case DONE:
+      break;
+    default:
+      printf("Unexpected state in rcopy. (Something went wrong)\n");
+      state = DONE;
+      break;
+    }
   }
+  close(socketNum);
+  outfile.close();
 }
 
-int readFromStdin(char *buffer) {
-  char aChar = 0;
-  int inputLen = 0;
+State establishConnection(int socketNum, sockaddr_in6 *server,
+                          std::ofstream &outfile) {
+  uint8_t payload[INIT_PAYLOAD_LEN];
+  uint32_t payloadLen = strnlen(cp.from_file, MAX_FILENAMELEN) + sizeof(int);
+  std::memcpy(payload, &cp.buffer_size, sizeof(int));
+  std::memcpy(payload + sizeof(int), cp.from_file, payloadLen);
 
-  // Important you don't input more characters than you have space
-  buffer[0] = '\0';
-  printf("Enter data: ");
-  while (inputLen < (MAX_BUFFER - 1) && aChar != '\n') {
-    aChar = getchar();
-    if (aChar != '\n') {
-      buffer[inputLen] = aChar;
-      inputLen++;
+  for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
+    pdu initPDU = pdu(payload, payloadLen, seq_num++, CLIENT_INIT);
+    initPDU.sendTo(socketNum, server);
+    if (pollCall(MS_RESEND) > 0) {
+      // Received a response
+      int addrLen = 0;
+      pdu initResponse = pdu(socketNum, server, &addrLen);
+
+      // Throw it away if its not good
+      if (!initResponse.badChecksum() || initResponse.flag() == SERVER_INIT) {
+        // If the payload had a 1, its a bad filename, if 0, its good
+        int badFilename = initResponse.payloadInt();
+        if (badFilename) {
+          printf("%s: No such file on server\n", cp.from_file);
+          return DONE;
+        }
+        outfile = std::ofstream(cp.to_file, std::ios::binary);
+        return RECV_DATA;
+      }
     }
   }
 
-  // Null terminate the string
-  buffer[inputLen] = '\0';
-  inputLen++;
-
-  return inputLen;
+  return DONE;
 }
+
+// int readFromStdin(char *buffer) {
+//   char aChar = 0;
+//   int inputLen = 0;
+//
+//   // Important you don't input more characters than you have space
+//   buffer[0] = '\0';
+//   printf("Enter data: ");
+//   while (inputLen < (MAX_BUFFER - 1) && aChar != '\n') {
+//     aChar = getchar();
+//     if (aChar != '\n') {
+//       buffer[inputLen] = aChar;
+//       inputLen++;
+//     }
+//   }
+//
+//   // Null terminate the string
+//   buffer[inputLen] = '\0';
+//   inputLen++;
+//
+//   return inputLen;
+// }
 
 void checkArgs(int argc, char *argv[]) {
 
@@ -121,8 +154,8 @@ void checkArgs(int argc, char *argv[]) {
   }
 
   // Assign variables
-  strncpy(cp.from_file, argv[1], MAX_FILENAMELEN);
-  strncpy(cp.to_file, argv[2], MAX_FILENAMELEN);
+  strncpy(cp.from_file, argv[1], MAX_FILENAMELEN - 1);
+  strncpy(cp.to_file, argv[2], MAX_FILENAMELEN - 1);
 
   char *end;
   cp.window_size = (uint32_t)strtol(argv[3], &end, 10);

@@ -22,7 +22,7 @@
 #define PAYLOAD_OFFSET 7
 class pdu {
 public:
-  pdu();
+  pdu(int socket, struct sockaddr_in6 *source, int *addrLen);
   pdu(uint8_t *pduBuffer);
   pdu(uint8_t *payload, int payloadLen, uint32_t seq_num, uint8_t flag);
   pdu(int payload, uint32_t seq_num, uint8_t flag);
@@ -41,7 +41,6 @@ public:
   int badChecksum() const;
   void resize(int payloadLen);
   int sendTo(int socketNum, struct sockaddr_in6 *destination);
-  int recvFrom(int socketNum, struct sockaddr_in6 *source, int *addrLen);
 
 private:
   std::vector<uint8_t> pduBuffer = std::vector<uint8_t>(MAX_PDU);
