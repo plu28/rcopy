@@ -37,9 +37,9 @@ std::ifstream processInitPDU(pdu &initPDU, uint32_t *bufferSize,
                              uint32_t *windowSize);
 
 State checkFilename(int socket, struct sockaddr_in6 *client,
-                    std::ifstream &file, int *seqNum);
+                    std::ifstream &file, Window &w);
 State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
-               int *seqNum, int bufferSize, Window &w);
+               int bufferSize, Window &w);
 State waitOnAck(int socket, struct sockaddr_in6 *client);
 State waitOnEOF(int socket, struct sockaddr_in6 *client, Window &w);
 State handleAcks(int socketNum, struct sockaddr_in6 *client, Window &w,
@@ -109,14 +109,13 @@ void processClient(struct sockaddr_in6 *client, pdu &initPDU) {
   Window *windowPtr = new Window(windowSize, START_SEQ_NUM);
 
   State state = FILENAME;
-  int seqNum = START_SEQ_NUM;
   while (state != DONE) {
     switch (state) {
     case FILENAME:
-      state = checkFilename(socket, client, file, &seqNum);
+      state = checkFilename(socket, client, file, *windowPtr);
       break;
     case SEND_DATA:
-      state = sendData(socket, client, file, &seqNum, bufferSize, *windowPtr);
+      state = sendData(socket, client, file, bufferSize, *windowPtr);
       break;
     case WAIT_ON_ACK:
       state = waitOnAck(socket, client);
@@ -141,25 +140,25 @@ void processClient(struct sockaddr_in6 *client, pdu &initPDU) {
 
 // Check if the file is accessible
 State checkFilename(int socket, struct sockaddr_in6 *client,
-                    std::ifstream &file, int *seqNum) {
+                    std::ifstream &file, Window &w) {
   if (!file) {
     // Bad file
-    printf("BAD FILE\n");
-    pdu badFilenamePDU = pdu(1, (*seqNum)++, SERVER_INIT);
+    pdu badFilenamePDU = pdu(1, w.getCurrent(), SERVER_INIT);
     badFilenamePDU.sendTo(socket, client);
+    w.pushPacket(badFilenamePDU);
     return DONE;
   } else {
     // Good file
-    printf("GOOD FILE\n");
-    pdu goodFilenamePDU = pdu(0, (*seqNum)++, SERVER_INIT);
+    pdu goodFilenamePDU = pdu(0, w.getCurrent(), SERVER_INIT);
     goodFilenamePDU.sendTo(socket, client);
+    w.pushPacket(goodFilenamePDU);
     return SEND_DATA;
   }
 }
 
 // Send a buffers worth of data
 State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
-               int *seqNum, int bufferSize, Window &w) {
+               int bufferSize, Window &w) {
   // Check poll(0) and handle RR/SREJ
   if (pollCall(0) > 0) {
     return handleAcks(socket, client, w, SEND_DATA);
@@ -172,12 +171,12 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
   file.read(buffer, bufferSize);
   if (file.gcount() > 0) {
     // Send data packet
-    pdu dataPDU = pdu((uint8_t *)&buffer, file.gcount(), (*seqNum)++, DATA);
+    pdu dataPDU = pdu((uint8_t *)&buffer, file.gcount(), w.getCurrent(), DATA);
     dataPDU.sendTo(socket, client);
     w.pushPacket(dataPDU);
   } else {
     // Send eof packet
-    pdu eofPDU = pdu(0, (*seqNum++), EOF_FLAG);
+    pdu eofPDU = pdu(0, w.getCurrent(), EOF_FLAG);
     eofPDU.sendTo(socket, client);
     w.pushPacket(eofPDU);
     return WAIT_ON_EOF_ACK;

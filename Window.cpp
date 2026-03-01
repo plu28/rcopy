@@ -13,9 +13,9 @@ class Window {
 public:
   Window(int size, int startSeq) {
     this->size = size;
-    current = 0;
-    lower = 0;
-    upper = 0 + size;
+    current = startSeq;
+    lower = startSeq;
+    upper = lower + size;
     window = std::vector<pdu>(size);
   }
   ~Window();
