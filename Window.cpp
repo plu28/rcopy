@@ -33,7 +33,7 @@ public:
     }
   };
 
-  // Register an acknowledgement
+  // Register an acknowledgement (moves window)
   void ack(int ackNum) {
     lower = ackNum;
     upper = ackNum + size;

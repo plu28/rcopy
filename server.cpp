@@ -217,7 +217,7 @@ State handleAcks(int socket, struct sockaddr_in6 *client, Window &w) {
     pdu recvPDU(socket, client, &addrLen);
     switch (recvPDU.flag()) {
     case RR:
-      // TODO: Update the window
+      w.ack(recvPDU.payloadInt());
       return SEND_DATA;
       break;
     case SREJ:
