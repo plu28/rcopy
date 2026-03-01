@@ -174,10 +174,12 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
     // Send data packet
     pdu dataPDU = pdu((uint8_t *)&buffer, file.gcount(), (*seqNum)++, DATA);
     dataPDU.sendTo(socket, client);
+    w.pushPacket(dataPDU);
   } else {
     // Send eof packet
     pdu eofPDU = pdu(0, (*seqNum++), EOF_FLAG);
     eofPDU.sendTo(socket, client);
+    w.pushPacket(eofPDU);
     return WAIT_ON_EOF_ACK;
   }
 
