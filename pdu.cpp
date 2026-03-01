@@ -40,7 +40,9 @@ pdu::pdu(uint8_t *payload, int payloadLen, uint32_t seq_num, uint8_t flag) {
   uint16_t checksum = in_cksum((uint16_t *)pduBuffer.data(), pduBuffer.size());
   std::memcpy(pduBuffer.data() + CHK_OFFSET, &checksum, sizeof(uint16_t));
   if (DEBUG)
-    std::cout << "\nCREATED PDU WITH REGULAR PAYLOAD\n" << *this << std::endl;
+    std::cout << "\n\033[92m" << "\nCREATED PDU WITH REGULAR PAYLOAD\n"
+              << "\033[0m\n"
+              << *this << std::endl;
 }
 // PDU with an integer payload (for SREJ, RR, and init response)
 pdu::pdu(int payload, uint32_t seq_num, uint8_t flag) {
@@ -58,7 +60,9 @@ pdu::pdu(int payload, uint32_t seq_num, uint8_t flag) {
   uint16_t checksum = in_cksum((uint16_t *)pduBuffer.data(), pduBuffer.size());
   std::memcpy(pduBuffer.data() + CHK_OFFSET, &checksum, sizeof(uint16_t));
   if (DEBUG)
-    std::cout << "\nCREATED PDU WITH INTEGER PAYLOAD\n" << *this << std::endl;
+    std::cout << "\n\033[92m" << "\nCREATED PDU WITH INTEGER PAYLOAD\n"
+              << "\033[0m\n"
+              << *this << std::endl;
 }
 
 // Returns 1 if checksum fails
