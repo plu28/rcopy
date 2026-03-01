@@ -41,7 +41,10 @@ public:
   bool isClosed() { return current == upper; }
 
   // Get the packet in an index in the window buffer
-  pdu getPacket(int index) {}
+  pdu getPacket(int seqNum) {
+    int index = seqNum % size;
+    return window[index];
+  }
 
 private:
   int lower;

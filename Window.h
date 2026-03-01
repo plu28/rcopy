@@ -11,5 +11,5 @@ public:
   bool isClosed();
 
   void pushPacket(pdu pduBuffer);
-  pdu getPacket(int index);
+  pdu getPacket(int seqNum);
 };
