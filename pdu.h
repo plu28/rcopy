@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <vector>
-#define DEBUG 1
+#define DEBUG 0
 
 #define RR 5
 #define SREJ 6

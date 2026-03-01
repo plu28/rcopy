@@ -25,11 +25,11 @@ pdu::pdu(int socket, struct sockaddr_in6 *source, int *addrLen) {
 }
 
 // PDU with a regular payload
-pdu::pdu(uint8_t *payload, int payloadLen, uint32_t seq_num, uint8_t flag) {
+pdu::pdu(uint8_t *payload, int payloadLen, uint32_t seqNum, uint8_t flag) {
   pduBuffer = std::vector<uint8_t>(payloadLen + PDU_HEADER_LEN);
   // Build the pdu buffer
-  uint32_t seq_num_net = htonl(seq_num);
-  std::memcpy(pduBuffer.data() + SEQ_OFFSET, &seq_num_net, sizeof(uint32_t));
+  uint32_t seqNumNet = htonl(seqNum);
+  std::memcpy(pduBuffer.data() + SEQ_OFFSET, &seqNumNet, sizeof(uint32_t));
 
   std::memset(pduBuffer.data() + CHK_OFFSET, 0x00, sizeof(uint16_t));
 
@@ -45,17 +45,18 @@ pdu::pdu(uint8_t *payload, int payloadLen, uint32_t seq_num, uint8_t flag) {
               << *this << std::endl;
 }
 // PDU with an integer payload (for SREJ, RR, and init response)
-pdu::pdu(int payload, uint32_t seq_num, uint8_t flag) {
+pdu::pdu(int payload, uint32_t seqNum, uint8_t flag) {
   pduBuffer = std::vector<uint8_t>(sizeof(int) + PDU_HEADER_LEN);
   // Build the pdu buffer
-  uint32_t seq_num_net = htonl(seq_num);
-  std::memcpy(pduBuffer.data() + SEQ_OFFSET, &seq_num_net, sizeof(uint32_t));
+  uint32_t seqNumNet = htonl(seqNum);
+  uint32_t payloadNet = htonl(payload);
+  std::memcpy(pduBuffer.data() + SEQ_OFFSET, &seqNumNet, sizeof(uint32_t));
 
   std::memset(pduBuffer.data() + CHK_OFFSET, 0x00, sizeof(uint16_t));
 
   std::memcpy(pduBuffer.data() + FLAG_OFFSET, &flag, sizeof(uint8_t));
 
-  std::memcpy(pduBuffer.data() + PAYLOAD_OFFSET, &payload, sizeof(int));
+  std::memcpy(pduBuffer.data() + PAYLOAD_OFFSET, &payloadNet, sizeof(int));
 
   uint16_t checksum = in_cksum((uint16_t *)pduBuffer.data(), pduBuffer.size());
   std::memcpy(pduBuffer.data() + CHK_OFFSET, &checksum, sizeof(uint16_t));
@@ -75,10 +76,10 @@ int pdu::badChecksum() const {
 }
 
 uint32_t pdu::seq() const {
-  uint32_t seq_num = 0;
-  std::memcpy(&seq_num, pduBuffer.data() + SEQ_OFFSET, sizeof(uint32_t));
-  seq_num = ntohl(seq_num);
-  return seq_num;
+  uint32_t seqNum = 0;
+  std::memcpy(&seqNum, pduBuffer.data() + SEQ_OFFSET, sizeof(uint32_t));
+  seqNum = ntohl(seqNum);
+  return seqNum;
 }
 int pdu::flag() const {
   int flag = 0;
@@ -111,7 +112,7 @@ int pdu::payloadInt() const {
   std::vector<uint8_t> payload = this->payload();
   int payloadInt = 0;
   std::memcpy(&payloadInt, payload.data(), sizeof(int));
-  return payloadInt;
+  return ntohl(payloadInt);
 }
 
 std::vector<uint8_t> &pdu::buffer() { return pduBuffer; }
