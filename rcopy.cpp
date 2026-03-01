@@ -1,6 +1,3 @@
-// Client side - UDP Code
-// By Hugh Smith	4/1/2017
-
 #include "pdu.h"
 #include <fcntl.h>
 #include <fstream>
@@ -21,26 +18,25 @@
 #include "cpe464.h"
 #include "networks.h"
 #include "pollLib.h"
-#include "safeUtil.h"
 
 #define MAX_FILENAMELEN 100
-#define INIT_PAYLOAD_LEN 104
+#define INIT_PAYLOAD_LEN 108
 #define MAX_WINDOW 230
 #define RETRY_LIM 10
 #define MS_RESEND 1000     // 1 second to resend
 #define MS_TERMINATE 10000 // 10 seconds to die
 
 typedef struct command_params_t {
-  char from_file[MAX_FILENAMELEN];
-  char to_file[MAX_FILENAMELEN];
-  uint32_t window_size;
-  uint32_t buffer_size;
-  float error_rate;
-  char host_name[MAX_FILENAMELEN];
+  char fromFile[MAX_FILENAMELEN];
+  char toFile[MAX_FILENAMELEN];
+  uint32_t windowSize;
+  uint32_t bufferSize;
+  float errorRate;
+  char hostName[MAX_FILENAMELEN];
   uint32_t port;
 } command_params;
 
-enum State { CONNECTION, RECV_DATA, DONE };
+enum State { CONNECTION, RECV_DATA, TIMEOUT, DONE };
 
 // int readFromStdin(char *buffer);
 void checkArgs(int argc, char *argv[]);
@@ -62,11 +58,11 @@ int main(int argc, char *argv[]) {
 
 void processFile() {
   struct sockaddr_in6 server; // Supports 4 and 6 but requires IPv6 struct
-  int socketNum = setupUdpClientToServer(&server, cp.host_name, cp.port);
+  int socketNum = setupUdpClientToServer(&server, cp.hostName, cp.port);
 
   setupPollSet();
   addToPollSet(socketNum);
-  sendErr_init(cp.error_rate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
+  sendErr_init(cp.errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
   std::ofstream outfile;
 
   State state = CONNECTION;
@@ -79,6 +75,9 @@ void processFile() {
       break;
     case DONE:
       break;
+    case TIMEOUT:
+      printf("Connection timed out\n");
+      state = DONE;
     default:
       printf("Unexpected state in rcopy. (Something went wrong)\n");
       state = DONE;
@@ -92,9 +91,14 @@ void processFile() {
 State establishConnection(int socketNum, sockaddr_in6 *server,
                           std::ofstream &outfile) {
   uint8_t payload[INIT_PAYLOAD_LEN];
-  uint32_t payloadLen = strnlen(cp.from_file, MAX_FILENAMELEN) + sizeof(int);
-  std::memcpy(payload, &cp.buffer_size, sizeof(int));
-  std::memcpy(payload + sizeof(int), cp.from_file, payloadLen);
+  // Set the buffer size
+  std::memcpy(payload, &cp.bufferSize, sizeof(uint32_t));
+  // Set the window size
+  std::memcpy(payload + sizeof(uint32_t), &cp.windowSize, sizeof(uint32_t));
+  // Set the filename
+  uint32_t payloadLen =
+      strnlen(cp.fromFile, MAX_FILENAMELEN) + (2 * sizeof(uint32_t));
+  std::memcpy(payload + (2 * sizeof(uint32_t)), cp.fromFile, payloadLen);
 
   for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
     pdu initPDU = pdu(payload, payloadLen, seq_num++, CLIENT_INIT);
@@ -109,16 +113,15 @@ State establishConnection(int socketNum, sockaddr_in6 *server,
         // If the payload had a 1, its a bad filename, if 0, its good
         int badFilename = initResponse.payloadInt();
         if (badFilename) {
-          printf("%s: No such file on server\n", cp.from_file);
+          printf("%s: No such file on server\n", cp.fromFile);
           return DONE;
         }
-        outfile = std::ofstream(cp.to_file, std::ios::binary);
+        outfile = std::ofstream(cp.toFile, std::ios::binary);
         return RECV_DATA;
       }
     }
   }
-
-  return DONE;
+  return TIMEOUT;
 }
 
 // int readFromStdin(char *buffer) {
@@ -154,14 +157,14 @@ void checkArgs(int argc, char *argv[]) {
   }
 
   // Assign variables
-  strncpy(cp.from_file, argv[1], MAX_FILENAMELEN - 1);
-  strncpy(cp.to_file, argv[2], MAX_FILENAMELEN - 1);
+  strncpy(cp.fromFile, argv[1], MAX_FILENAMELEN - 1);
+  strncpy(cp.toFile, argv[2], MAX_FILENAMELEN - 1);
 
   char *end;
-  cp.window_size = (uint32_t)strtol(argv[3], &end, 10);
-  cp.buffer_size = (uint32_t)strtol(argv[4], &end, 10);
-  cp.error_rate = (float)strtol(argv[5], &end, 10);
-  strncpy(cp.host_name, argv[6], MAX_FILENAMELEN);
+  cp.windowSize = (uint32_t)strtol(argv[3], &end, 10);
+  cp.bufferSize = (uint32_t)strtol(argv[4], &end, 10);
+  cp.errorRate = (float)strtol(argv[5], &end, 10);
+  strncpy(cp.hostName, argv[6], MAX_FILENAMELEN);
   cp.port = (uint32_t)strtol(argv[7], &end, 10);
 
   // check arg limits
@@ -177,15 +180,15 @@ void checkArgs(int argc, char *argv[]) {
     fprintf(stderr, "Host string too long\n");
     exit(-1);
   }
-  if (cp.error_rate >= 1 || cp.error_rate < 0) {
+  if (cp.errorRate >= 1 || cp.errorRate < 0) {
     fprintf(stderr, "Error rate must be [0, 1)\n");
     exit(-1);
   }
-  if (cp.buffer_size < 1 || cp.buffer_size > 1400) {
+  if (cp.bufferSize < 1 || cp.bufferSize > 1400) {
     fprintf(stderr, "Buffer size must be [1, %d]\n", MAX_BUFFER);
     exit(-1);
   }
-  if (cp.window_size < 1 || cp.window_size > 1400) {
+  if (cp.windowSize < 1 || cp.windowSize > 1400) {
     fprintf(stderr, "Window size must be [1, %d]\n", MAX_WINDOW);
     exit(-1);
   }
