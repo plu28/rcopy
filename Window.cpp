@@ -21,9 +21,9 @@ public:
   ~Window();
 
   int getSize() { return size; }
-  int getUpper() { return upper; }
-  int getCurrent() { return current; }
-  int getLower() { return lower; }
+  pdu getUpper() { return window[upper % size]; }
+  pdu getCurrent() { return window[upper % size]; }
+  pdu getLower() { return window[lower % size]; }
 
   // Push a packet to the buffer
   void pushPacket(pdu packet) {

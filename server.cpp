@@ -199,7 +199,8 @@ State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w) {
     if (pollCall(MS_RESEND) > 0) {
       return handleAcks(socket, client, w, WAIT_ON_ACK);
     } else {
-      retryCount++;
+      // Resend the lowest packet if timeout
+      w.getPacket(w.getLower()) retryCount++;
     }
   }
   return DONE;
