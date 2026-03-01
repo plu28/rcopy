@@ -37,7 +37,7 @@ typedef struct command_params_t {
   uint32_t port;
 } command_params;
 
-enum State { CONNECT, RECV_DATA, TIMEOUT, BUFFER_DATA, DONE };
+enum State { CONNECT, RECV_DATA, TIMEOUT, DONE };
 static int seqNum = 0;
 
 // int readFromStdin(char *buffer);
@@ -132,6 +132,7 @@ State establishConnection(int socketNum, sockaddr_in6 *server,
 
 State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
                Window &w) {
+  // The lowest slot in the window points to the data we're missing
   // Wait for 10 seconds
   if (pollCall(MS_TERMINATE) > 0) {
     // Receive the data
@@ -142,21 +143,25 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
       // Dispatch SREJ,
       pdu srejPDU = pdu(recvPDU.seq(), seqNum++, SREJ);
       srejPDU.sendTo(socket, server);
-      return BUFFER_DATA;
+      // Push the data to the buffer for now
+      w.pushPacket(recvPDU);
+      return RECV_DATA;
     }
     // Check if we missed a packet
-    if (recvPDU.seq() > w.getCurrent()) {
+    if (recvPDU.seq() > w.getLower().seq()) {
       // Dispatch SREJ FOR ALL MISSED
       for (int i = w.getCurrent(); i < recvPDU.seq(); i++) {
         pdu srejPDU = pdu(recvPDU.seq(), seqNum++, SREJ);
         srejPDU.sendTo(socket, server);
       }
-      return BUFFER_DATA;
+      // Push the data to the buffer for now
+      w.pushPacket(recvPDU);
+      return RECV_DATA;
     }
     // Check if its data we've already received
-    if (recvPDU.seq() < w.getCurrent()) {
-      // TODO: Send the highest possible ack
-      pdu ackPDU(w.getCurrent(), seqNum++, RR);
+    if (recvPDU.seq() < w.getLower().seq()) {
+      // Send the highest possible ack
+      pdu ackPDU(w.getLower().seq(), seqNum++, RR);
       return RECV_DATA;
     }
     // This data is our current. Write it to the file
