@@ -138,6 +138,13 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
     // Receive the data
     int addrLen = 0;
     pdu recvPDU = pdu(socket, server, &addrLen);
+    // Check if EOF packet
+    if (recvPDU.flag() == EOF_FLAG) {
+      // Dispatch EOF ACK and terminate
+      pdu eofACKPDU(0, seqNum++, EOF_FLAG);
+      eofACKPDU.sendTo(socket, server);
+      return DONE;
+    }
     // Verify checksum
     if (recvPDU.badChecksum()) {
       // Dispatch SREJ,
@@ -172,6 +179,7 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
     w.pushPacket(recvPDU); // This moves our current up
     pdu ackPDU(recvPDU.seq() + 1, seqNum++, RR);
     ackPDU.sendTo(socket, server);
+    return RECV_DATA;
   }
   // Server has been quiet for 10s, assume its dead
   return TIMEOUT;
