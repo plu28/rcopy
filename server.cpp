@@ -224,6 +224,7 @@ State handleAcks(int socket, struct sockaddr_in6 *client, Window &w,
   while (pollCall(0) > 0) {
     int addrLen = 0;
     pdu recvPDU(socket, client, &addrLen);
+    // TODO: Verify checksum 
     switch (recvPDU.flag()) {
     case RR:
       w.ack(recvPDU.payloadInt());

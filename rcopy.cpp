@@ -38,6 +38,7 @@ typedef struct command_params_t {
 } command_params;
 
 enum State { CONNECT, RECV_DATA, TIMEOUT, BUFFER_DATA, DONE };
+static int seqNum = 0;
 
 // int readFromStdin(char *buffer);
 void checkArgs(int argc, char *argv[]);
@@ -129,10 +130,37 @@ State establishConnection(int socketNum, sockaddr_in6 *server,
   return TIMEOUT;
 }
 
-State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile) {
+State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
+               Window &w) {
   // Wait for 10 seconds
   if (pollCall(MS_TERMINATE) > 0) {
     // TODO: Receive the data
+    int addrLen = 0;
+    pdu recvPDU = pdu(socket, server, &addrLen);
+    // Verify checksum
+    if (recvPDU.badChecksum()) {
+      // TODO: Dispatch SREJ,
+      return BUFFER_DATA;
+    }
+    // Check if we missed a packet
+    if (recvPDU.seq() > w.getCurrent()) {
+      // TODO: Dispatch SREJ FOR ALL MISSED
+      return BUFFER_DATA;
+    }
+    // Check if its data we've already received
+    if (recvPDU.seq() < w.getCurrent()) {
+      // TODO: Send the highest possible ack
+      pdu ackPDU(w.getCurrent(), seqNum++, RR);
+      return RECV_DATA;
+    }
+    // This data is our current. Write it to the file
+    outfile.write(reinterpret_cast<const char *>(recvPDU.payload().data()),
+                  recvPDU.payload().size());
+    // Send ack
+    w.ack(recvPDU.seq() + 1);
+    w.pushPacket(recvPDU); // This moves our current up
+    pdu ackPDU(recvPDU.seq() + 1, seqNum++, RR);
+    ackPDU.sendTo(socket, server);
   } else {
     // Server has been quiet for 10s, assume its dead
     return TIMEOUT;
