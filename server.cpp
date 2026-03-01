@@ -221,8 +221,7 @@ State handleAcks(int socket, struct sockaddr_in6 *client, Window &w) {
       return SEND_DATA;
       break;
     case SREJ:
-      // TODO: Resend the packet
-      w.getPacket(w.getLower());
+      w.getPacket(recvPDU.payloadInt()).sendTo(socket, client);
       return SEND_DATA;
       break;
     case EOF_FLAG:
