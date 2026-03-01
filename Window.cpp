@@ -26,9 +26,10 @@ public:
   int getLower() { return lower; }
 
   // Push a packet to the buffer
-  void pushPacket(uint8_t *pduBuffer, int pduLength) {
-    if (current == upper) {
-      std::cout << "" << std::endl;
+  void pushPacket(pdu packet) {
+    if (!this->isClosed()) {
+      int index = packet.seq() % size;
+      window[index] = packet;
     }
   };
 
