@@ -1,4 +1,5 @@
 docs/
+destination
 *.o
 *.sh
 *.SYMDEF
