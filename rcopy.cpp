@@ -15,10 +15,10 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-#include "Window.h"
 #include "cpe464.h"
 #include "networks.h"
 #include "pollLib.h"
+#include "Window.h"
 
 #define MAX_FILENAMELEN 100
 #define INIT_PAYLOAD_LEN 108
@@ -44,10 +44,10 @@ static int seqNum = 0;
 void checkArgs(int argc, char *argv[]);
 void processFile();
 State establishConnection(int socketNum, sockaddr_in6 *server,
-                          std::ofstream &outfile, Window *&w);
+                          std::ofstream &outfile);
 
 State recvData(int socketNum, sockaddr_in6 *server, std::ofstream &outfile,
-               Window *&w);
+               Window &w);
 
 static command_params cp;
 
@@ -68,16 +68,16 @@ void processFile() {
   addToPollSet(socketNum);
   sendErr_init(cp.errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
   std::ofstream outfile;
-  Window *w = nullptr;
+  Window *w = new Window(cp.windowSize, START_SEQ_NUM);
 
   State state = CONNECT;
   while (state != DONE) {
     switch (state) {
     case CONNECT:
-      state = establishConnection(socketNum, &server, outfile, w);
+      state = establishConnection(socketNum, &server, outfile);
       break;
     case RECV_DATA:
-      state = recvData(socketNum, &server, outfile, w);
+      state = recvData(socketNum, &server, outfile, *w);
       break;
     case DONE:
       break;
@@ -95,7 +95,7 @@ void processFile() {
 }
 
 State establishConnection(int socketNum, sockaddr_in6 *server,
-                          std::ofstream &outfile, Window *&w) {
+                          std::ofstream &outfile) {
   uint8_t payload[INIT_PAYLOAD_LEN];
   // Set the buffer size
   std::memcpy(payload, &cp.bufferSize, sizeof(uint32_t));
@@ -157,7 +157,7 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
     // Check if we missed a packet
     if (recvPDU.seq() > w.getLower().seq()) {
       // Dispatch SREJ FOR ALL MISSED
-      for (int i = w.getCurrent(); i < recvPDU.seq(); i++) {
+      for (int i = w.getCurrent(); i < (int)recvPDU.seq(); i++) {
         pdu srejPDU = pdu(recvPDU.seq(), seqNum++, SREJ);
         srejPDU.sendTo(socket, server);
       }

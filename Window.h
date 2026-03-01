@@ -12,6 +12,12 @@ public:
   bool isClosed();
 
   void ack(int ackNum);
-  void pushPacket(pdu pduBuffer);
+  void pushPacket(pdu packet);
   pdu getPacket(int seqNum);
+private:
+  int lower;
+  int upper;
+  int current;
+  int size;
+  std::vector<pdu> window;
 };

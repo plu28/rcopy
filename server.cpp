@@ -9,12 +9,12 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "Window.h"
 #include "cpe464.h"
 #include "gethostbyname.h"
 #include "networks.h"
 #include "pdu.h"
 #include "pollLib.h"
-#include "window.h"
 
 #define RETRY_LIM 10
 #define MS_RESEND 1000 // 1 second to resend
@@ -39,7 +39,7 @@ State checkFilename(int socket, struct sockaddr_in6 *client,
                     std::ifstream &file);
 State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
                int bufferSize, Window &w);
-State waitOnAck(int socket, struct sockaddr_in6 *client);
+State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w);
 State waitOnEOF(int socket, struct sockaddr_in6 *client, Window &w);
 State handleAcks(int socketNum, struct sockaddr_in6 *client, Window &w,
                  State prev);
@@ -62,7 +62,6 @@ int main(int argc, char *argv[]) {
 
 // Server receives a connection and passes it on to a child
 void processServer(int socketNum) {
-  int pduLen = 0;
   pid_t pid = 0;
   struct sockaddr_in6 client;
   int clientAddrLen = sizeof(client);
@@ -117,7 +116,7 @@ void processClient(struct sockaddr_in6 *client, pdu &initPDU) {
       state = sendData(socket, client, file, bufferSize, *windowPtr);
       break;
     case WAIT_ON_ACK:
-      state = waitOnAck(socket, client);
+      state = waitOnAck(socket, client, *windowPtr);
       break;
     case WAIT_ON_EOF_ACK:
       state = waitOnEOF(socket, client, *windowPtr);
@@ -164,8 +163,8 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
   if (w.isClosed()) {
     return WAIT_ON_ACK;
   }
-  char buffer[bufferSize];
-  file.read(buffer, bufferSize);
+  std::vector<char> buffer(bufferSize);
+  file.read(buffer.data(), bufferSize);
   if (file.gcount() > 0) {
     // Send data packet
     pdu dataPDU = pdu((uint8_t *)&buffer, file.gcount(), w.getCurrent(), DATA);
@@ -224,7 +223,7 @@ State handleAcks(int socket, struct sockaddr_in6 *client, Window &w,
   while (pollCall(0) > 0) {
     int addrLen = 0;
     pdu recvPDU(socket, client, &addrLen);
-    // TODO: Verify checksum 
+    // TODO: Verify checksum
     switch (recvPDU.flag()) {
     case RR:
       w.ack(recvPDU.payloadInt());

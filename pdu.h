@@ -25,8 +25,8 @@
 #define PAYLOAD_OFFSET 7
 class pdu {
 public:
+  pdu() = default;
   pdu(int socket, struct sockaddr_in6 *source, int *addrLen);
-  pdu(uint8_t *pduBuffer);
   pdu(uint8_t *payload, int payloadLen, uint32_t seqNum, uint8_t flag);
   pdu(int payload, uint32_t seqNum, uint8_t flag);
 
