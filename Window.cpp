@@ -34,9 +34,9 @@ public:
   };
 
   // Register an acknowledgement
-  void acknowledge(int ack_num) {
-    lower = ack_num;
-    upper = ack_num + size;
+  void ack(int ackNum) {
+    lower = ackNum;
+    upper = ackNum + size;
   }
 
   bool isClosed() { return current == upper; }

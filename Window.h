@@ -10,6 +10,7 @@ public:
   int getLower() const;
   bool isClosed();
 
+  void ack(int ackNum);
   void pushPacket(pdu pduBuffer);
   pdu getPacket(int seqNum);
 };
