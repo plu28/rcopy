@@ -23,7 +23,6 @@ enum State {
   FILENAME,
   SEND_DATA,
   WAIT_ON_ACK,
-  HANDLE_ACK,
   TIMEOUT_ON_ACK,
   WAIT_ON_EOF_ACK,
   TIMEOUT_ON_EOF_ACK,
@@ -43,9 +42,10 @@ State checkFilename(int socket, struct sockaddr_in6 *client,
                     std::ifstream &file, int *seqNum);
 State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
                int *seqNum, int bufferSize, Window &w);
-State waitOnACK(int socket, struct sockaddr_in6 *client);
-State waitOnEOF(int socket, struct sockaddr_in6 *client);
-State handleAcks(int socketNum, struct sockaddr_in6 *client, Window &w);
+State waitOnAck(int socket, struct sockaddr_in6 *client);
+State waitOnEOF(int socket, struct sockaddr_in6 *client, Window &w);
+State handleAcks(int socketNum, struct sockaddr_in6 *client, Window &w,
+                 State prev);
 
 int main(int argc, char *argv[]) {
   int socketNum = 0;
@@ -120,15 +120,13 @@ void processClient(struct sockaddr_in6 *client, pdu &initPDU) {
     case SEND_DATA:
       state = sendData(socket, client, file, &seqNum, bufferSize, *windowPtr);
       break;
-    case HANDLE_ACK:
-      break;
     case WAIT_ON_ACK:
-      state = waitOnACK(socket, client);
+      state = waitOnAck(socket, client);
       break;
     case TIMEOUT_ON_ACK:
       break;
     case WAIT_ON_EOF_ACK:
-      state = waitOnEOF(socket, client);
+      state = waitOnEOF(socket, client, *windowPtr);
       break;
     case TIMEOUT_ON_EOF_ACK:
       break;
@@ -170,7 +168,7 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
                int *seqNum, int bufferSize, Window &w) {
   // Check poll(0) and handle RR/SREJ
   if (pollCall(0) > 0) {
-    return HANDLE_ACK;
+    return handleAcks(socket, client, w, SEND_DATA);
   }
   // Don't send data if the window is closed
   if (w.isClosed()) {
@@ -178,7 +176,6 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
   }
   char buffer[bufferSize];
   file.read(buffer, bufferSize);
-
   if (file.gcount() > 0) {
     // Send data packet
     pdu dataPDU = pdu((uint8_t *)&buffer, file.gcount(), (*seqNum)++, DATA);
@@ -195,12 +192,13 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
 }
 
 // Waiting on rcopy for an ack during usage phase
-State waitOnACK(int socket, struct sockaddr_in6 *client) {
+State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w) {
+  if (!w.isClosed())
+    return SEND_DATA;
   for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
     if (pollCall(MS_RESEND) > 0) {
-      // TODO: Received something, so process it
+      return handleAcks(socket, client, w, WAIT_ON_ACK);
     } else {
-      // TODO: Resend the lowest packet in the window
       retryCount++;
     }
   }
@@ -210,7 +208,8 @@ State waitOnACK(int socket, struct sockaddr_in6 *client) {
 // Update the window if an RR,
 // Resend a packet if an SREJ
 // Close if EOF ack received
-State handleAcks(int socket, struct sockaddr_in6 *client, Window &w) {
+State handleAcks(int socket, struct sockaddr_in6 *client, Window &w,
+                 State prev) {
   // Process all of the packets
   while (pollCall(0) > 0) {
     int addrLen = 0;
@@ -218,14 +217,11 @@ State handleAcks(int socket, struct sockaddr_in6 *client, Window &w) {
     switch (recvPDU.flag()) {
     case RR:
       w.ack(recvPDU.payloadInt());
-      return SEND_DATA;
       break;
     case SREJ:
       w.getPacket(recvPDU.payloadInt()).sendTo(socket, client);
-      return SEND_DATA;
       break;
     case EOF_FLAG:
-      // TODO: Teardown
       return DONE;
       break;
     default:
@@ -234,6 +230,14 @@ State handleAcks(int socket, struct sockaddr_in6 *client, Window &w) {
       break;
     }
   }
+  return prev;
+}
+
+// Try waiting on an EOF packet
+// NOTE: I don't think we need a separate state for waiting on EOF. I think this
+// logic is the same as waiting on RRs and we can merge the too
+State waitOnEOF(int socket, struct sockaddr_in6 *client, Window &w) {
+  // Handleacks?
 }
 
 int checkArgs(int argc, char *argv[]) {
