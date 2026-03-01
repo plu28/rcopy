@@ -134,17 +134,23 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
                Window &w) {
   // Wait for 10 seconds
   if (pollCall(MS_TERMINATE) > 0) {
-    // TODO: Receive the data
+    // Receive the data
     int addrLen = 0;
     pdu recvPDU = pdu(socket, server, &addrLen);
     // Verify checksum
     if (recvPDU.badChecksum()) {
-      // TODO: Dispatch SREJ,
+      // Dispatch SREJ,
+      pdu srejPDU = pdu(recvPDU.seq(), seqNum++, SREJ);
+      srejPDU.sendTo(socket, server);
       return BUFFER_DATA;
     }
     // Check if we missed a packet
     if (recvPDU.seq() > w.getCurrent()) {
-      // TODO: Dispatch SREJ FOR ALL MISSED
+      // Dispatch SREJ FOR ALL MISSED
+      for (int i = w.getCurrent(); i < recvPDU.seq(); i++) {
+        pdu srejPDU = pdu(recvPDU.seq(), seqNum++, SREJ);
+        srejPDU.sendTo(socket, server);
+      }
       return BUFFER_DATA;
     }
     // Check if its data we've already received
