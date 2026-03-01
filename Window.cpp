@@ -29,8 +29,7 @@ public:
   // Push a packet to the buffer
   void pushPacket(pdu packet) {
     if (!this->isClosed()) {
-      // BUG: Maybe? Current is a sequence number
-      current = packet.seq() + 1; // The next sequence number to send
+      current++; // The next sequence number to send
       int index = packet.seq() % size;
       window[index] = packet;
     }

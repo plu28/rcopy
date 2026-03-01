@@ -13,6 +13,9 @@
 #define DATA_SREJ 17
 #define DATA_TIMEOUT 18
 
+// Note that SEQ #0 is reserved for initialization on both ends
+#define START_SEQ_NUM 1
+
 #define MAX_PDU 1407
 #define MAX_BUFFER 1400
 #define PDU_HEADER_LEN 7

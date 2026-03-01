@@ -16,7 +16,6 @@
 #include "pollLib.h"
 #include "window.h"
 
-#define START_SEQ_NUM 200
 #define RETRY_LIM 10
 #define MS_RESEND 1000 // 1 second to resend
 enum State {
@@ -37,7 +36,7 @@ std::ifstream processInitPDU(pdu &initPDU, uint32_t *bufferSize,
                              uint32_t *windowSize);
 
 State checkFilename(int socket, struct sockaddr_in6 *client,
-                    std::ifstream &file, Window &w);
+                    std::ifstream &file);
 State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
                int bufferSize, Window &w);
 State waitOnAck(int socket, struct sockaddr_in6 *client);
@@ -112,7 +111,7 @@ void processClient(struct sockaddr_in6 *client, pdu &initPDU) {
   while (state != DONE) {
     switch (state) {
     case FILENAME:
-      state = checkFilename(socket, client, file, *windowPtr);
+      state = checkFilename(socket, client, file);
       break;
     case SEND_DATA:
       state = sendData(socket, client, file, bufferSize, *windowPtr);
@@ -140,18 +139,16 @@ void processClient(struct sockaddr_in6 *client, pdu &initPDU) {
 
 // Check if the file is accessible
 State checkFilename(int socket, struct sockaddr_in6 *client,
-                    std::ifstream &file, Window &w) {
+                    std::ifstream &file) {
   if (!file) {
     // Bad file
-    pdu badFilenamePDU = pdu(1, w.getCurrent(), SERVER_INIT);
+    pdu badFilenamePDU = pdu(1, 0, SERVER_INIT);
     badFilenamePDU.sendTo(socket, client);
-    w.pushPacket(badFilenamePDU);
     return DONE;
   } else {
     // Good file
-    pdu goodFilenamePDU = pdu(0, w.getCurrent(), SERVER_INIT);
+    pdu goodFilenamePDU = pdu(0, 0, SERVER_INIT);
     goodFilenamePDU.sendTo(socket, client);
-    w.pushPacket(goodFilenamePDU);
     return SEND_DATA;
   }
 }

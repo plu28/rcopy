@@ -15,6 +15,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+#include "Window.h"
 #include "cpe464.h"
 #include "networks.h"
 #include "pollLib.h"
@@ -36,15 +37,17 @@ typedef struct command_params_t {
   uint32_t port;
 } command_params;
 
-enum State { CONNECTION, RECV_DATA, TIMEOUT, DONE };
+enum State { CONNECT, RECV_DATA, TIMEOUT, BUFFER_DATA, DONE };
 
 // int readFromStdin(char *buffer);
 void checkArgs(int argc, char *argv[]);
 void processFile();
 State establishConnection(int socketNum, sockaddr_in6 *server,
-                          std::ofstream &outfile);
+                          std::ofstream &outfile, Window *&w);
 
-static uint32_t seq_num = 0;
+State recvData(int socketNum, sockaddr_in6 *server, std::ofstream &outfile,
+               Window *&w);
+
 static command_params cp;
 
 int main(int argc, char *argv[]) {
@@ -64,14 +67,16 @@ void processFile() {
   addToPollSet(socketNum);
   sendErr_init(cp.errorRate, DROP_ON, FLIP_ON, DEBUG_ON, RSEED_ON);
   std::ofstream outfile;
+  Window *w = nullptr;
 
-  State state = CONNECTION;
+  State state = CONNECT;
   while (state != DONE) {
     switch (state) {
-    case CONNECTION:
-      state = establishConnection(socketNum, &server, outfile);
+    case CONNECT:
+      state = establishConnection(socketNum, &server, outfile, w);
       break;
     case RECV_DATA:
+      state = recvData(socketNum, &server, outfile, w);
       break;
     case DONE:
       break;
@@ -89,7 +94,7 @@ void processFile() {
 }
 
 State establishConnection(int socketNum, sockaddr_in6 *server,
-                          std::ofstream &outfile) {
+                          std::ofstream &outfile, Window *&w) {
   uint8_t payload[INIT_PAYLOAD_LEN];
   // Set the buffer size
   std::memcpy(payload, &cp.bufferSize, sizeof(uint32_t));
@@ -101,7 +106,7 @@ State establishConnection(int socketNum, sockaddr_in6 *server,
   std::memcpy(payload + (2 * sizeof(uint32_t)), cp.fromFile, payloadLen);
 
   for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
-    pdu initPDU = pdu(payload, payloadLen, seq_num++, CLIENT_INIT);
+    pdu initPDU = pdu(payload, payloadLen, 0, CLIENT_INIT);
     initPDU.sendTo(socketNum, server);
     if (pollCall(MS_RESEND) > 0) {
       // Received a response
@@ -122,6 +127,16 @@ State establishConnection(int socketNum, sockaddr_in6 *server,
     }
   }
   return TIMEOUT;
+}
+
+State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile) {
+  // Wait for 10 seconds
+  if (pollCall(MS_TERMINATE) > 0) {
+    // TODO: Receive the data
+  } else {
+    // Server has been quiet for 10s, assume its dead
+    return TIMEOUT;
+  }
 }
 
 // int readFromStdin(char *buffer) {
