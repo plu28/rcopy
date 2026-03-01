@@ -9,11 +9,13 @@ public:
   int getCurrent() const;
   pdu getLast() const; // Get the last sent PDU
   pdu getLower() const;
+  int getLowerSeq() const;
   bool isClosed();
 
   void ack(int ackNum);
   void pushPacket(pdu packet);
   pdu getPacket(int seqNum);
+
 private:
   int lower;
   int upper;

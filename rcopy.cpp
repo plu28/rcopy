@@ -96,6 +96,8 @@ void processFile() {
 
 State establishConnection(int socketNum, sockaddr_in6 *server,
                           std::ofstream &outfile) {
+  if (DEBUG)
+    std::cout << "\033[95m" << "\n ATTEMPTING TO CONNECT " << std::endl;
   uint8_t payload[INIT_PAYLOAD_LEN];
   // Set the buffer size
   std::memcpy(payload, &cp.bufferSize, sizeof(uint32_t));
@@ -140,6 +142,10 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
     pdu recvPDU = pdu(socket, server, &addrLen);
     // Check if EOF packet
     if (recvPDU.flag() == EOF_FLAG) {
+      if (DEBUG)
+        std::cout << "\033[91m" << "\n GOT EOF"
+                  << "\033[0m\n"
+                  << std::endl;
       // Dispatch EOF ACK and terminate
       pdu eofACKPDU(0, seqNum++, EOF_FLAG);
       eofACKPDU.sendTo(socket, server);
@@ -147,6 +153,10 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
     }
     // Verify checksum
     if (recvPDU.badChecksum()) {
+      if (DEBUG)
+        std::cout << "\033[91m" << "\n GOT BAD CHECKSUM"
+                  << "\033[0m\n"
+                  << std::endl;
       // Dispatch SREJ,
       pdu srejPDU = pdu(recvPDU.seq(), seqNum++, SREJ);
       srejPDU.sendTo(socket, server);
@@ -155,7 +165,11 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
       return RECV_DATA;
     }
     // Check if we missed a packet
-    if (recvPDU.seq() > w.getLower().seq()) {
+    if (recvPDU.seq() > (uint32_t)w.getLowerSeq()) {
+      if (DEBUG)
+        std::cout << "\033[91m" << "\n MISSED A PACKET GOT: " << recvPDU.seq()
+                  << " EXPECTED: " << w.getLowerSeq() << "\033[0m\n"
+                  << std::endl;
       // Dispatch SREJ FOR ALL MISSED
       for (int i = w.getCurrent(); i < (int)recvPDU.seq(); i++) {
         pdu srejPDU = pdu(recvPDU.seq(), seqNum++, SREJ);
@@ -166,12 +180,20 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
       return RECV_DATA;
     }
     // Check if its data we've already received
-    if (recvPDU.seq() < w.getLower().seq()) {
+    if (recvPDU.seq() < (uint32_t)w.getLowerSeq()) {
+      if (DEBUG)
+        std::cout << "\033[91m" << "\n GOT SENT REPEAT DATA"
+                  << "\033[0m\n"
+                  << std::endl;
       // Send the highest possible ack
-      pdu ackPDU(w.getLower().seq(), seqNum++, RR);
+      pdu ackPDU(w.getLowerSeq(), seqNum++, RR);
       return RECV_DATA;
     }
-    // This data is our current. Write it to the file
+    if (DEBUG)
+      std::cout << "\033[92m" << "\n WRITING PACKET " << w.getLowerSeq()
+                << "\033[0m\n"
+                << std::endl;
+    // This data is what we want. Write it to the file
     std::vector<uint8_t> payload = recvPDU.payload();
     outfile.write(reinterpret_cast<const char *>(payload.data()),
                   payload.size());

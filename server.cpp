@@ -203,8 +203,13 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
 
 // Waiting on rcopy for an ack during usage phase
 State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w) {
-  if (!w.isClosed())
+  if (!w.isClosed()) {
+    if (DEBUG)
+      std::cout << "\033[95m" << "\nWINDOW CLOSED\n"
+                << "\033[0m\n"
+                << std::endl;
     return SEND_DATA;
+  }
   for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
     if (pollCall(MS_RESEND) > 0) {
       return handleAcks(socket, client, w, WAIT_ON_ACK);
@@ -245,6 +250,10 @@ State handleAcks(int socket, struct sockaddr_in6 *client, Window &w,
     // TODO: Verify checksum
     switch (recvPDU.flag()) {
     case RR:
+      if (DEBUG)
+        std::cout << "\033[94m" << "\n ACKING " << recvPDU.payloadInt()
+                  << "\033[0m\n"
+                  << std::endl;
       w.ack(recvPDU.payloadInt());
       break;
     case SREJ:

@@ -22,12 +22,13 @@ int Window::getSize() const { return size; }
 pdu Window::getUpper() const { return window[upper % size]; }
 int Window::getCurrent() const { return current; }
 pdu Window::getLower() const { return window[lower % size]; }
+int Window::getLowerSeq() const { return lower; }
 pdu Window::getLast() const { return window[window.size() - 1]; }
 
 // Push a packet to the buffer
 void Window::pushPacket(pdu packet) {
   if (!this->isClosed()) {
-    current++; // The next sequence number to send
+    current++; // The next sequence number to send/expect
     int index = packet.seq() % size;
     window[index] = packet;
   }
