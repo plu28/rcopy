@@ -106,7 +106,7 @@ void processClient(struct sockaddr_in6 *client, pdu &initPDU) {
   uint32_t bufferSize = 0;
   uint32_t windowSize = 0;
   std::ifstream file = processInitPDU(initPDU, &bufferSize, &windowSize);
-  Window *windowPtr = new Window(windowSize);
+  Window *windowPtr = new Window(windowSize, START_SEQ_NUM);
 
   State state = FILENAME;
   int seqNum = START_SEQ_NUM;
@@ -211,8 +211,8 @@ State waitOnEOF(int socket, struct sockaddr_in6 *client, Window &w) {
     if (pollCall(MS_RESEND) > 0) {
       return handleAcks(socket, client, w, WAIT_ON_EOF_ACK);
     } else {
-      // Resend EOF packet (current)
-      w.getCurrent().sendTo(socket, client);
+      // Resend EOF packet (last sent PDU)
+      w.getLast().sendTo(socket, client);
       retryCount++;
     }
   }

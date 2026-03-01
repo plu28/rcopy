@@ -1,12 +1,13 @@
 #include "pdu.h"
 class Window {
 public:
-  Window(int size);
+  Window(int size, int startSeq);
   ~Window();
 
   int getSize() const;
   pdu getUpper() const;
-  pdu getCurrent() const;
+  int getCurrent() const;
+  pdu getLast() const; // Get the last sent PDU
   pdu getLower() const;
   bool isClosed();
 

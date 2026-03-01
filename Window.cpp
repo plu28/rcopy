@@ -11,7 +11,7 @@
 
 class Window {
 public:
-  Window(int size) {
+  Window(int size, int startSeq) {
     this->size = size;
     current = 0;
     lower = 0;
@@ -22,12 +22,15 @@ public:
 
   int getSize() { return size; }
   pdu getUpper() { return window[upper % size]; }
-  pdu getCurrent() { return window[upper % size]; }
+  int getCurrent() { return current; }
   pdu getLower() { return window[lower % size]; }
+  pdu getLast() { return window[window.size() - 1]; }
 
   // Push a packet to the buffer
   void pushPacket(pdu packet) {
     if (!this->isClosed()) {
+      // BUG: Maybe? Current is a sequence number
+      current = packet.seq() + 1; // The next sequence number to send
       int index = packet.seq() % size;
       window[index] = packet;
     }
