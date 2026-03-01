@@ -200,7 +200,24 @@ State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w) {
       return handleAcks(socket, client, w, WAIT_ON_ACK);
     } else {
       // Resend the lowest packet if timeout
-      w.getPacket(w.getLower()) retryCount++;
+      w.getLower().sendTo(socket, client);
+      retryCount++;
+    }
+  }
+  return DONE;
+}
+
+// NOTE: Should be called by sendData when EOF is read
+// The only difference between this function and a regular wait
+// is the timeout handling.
+State waitOnEOF(int socket, struct sockaddr_in6 *client, Window &w) {
+  for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
+    if (pollCall(MS_RESEND) > 0) {
+      return handleAcks(socket, client, w, WAIT_ON_EOF_ACK);
+    } else {
+      // Resend EOF packet (current)
+      w.getCurrent().sendTo(socket, client);
+      retryCount++;
     }
   }
   return DONE;
@@ -232,13 +249,6 @@ State handleAcks(int socket, struct sockaddr_in6 *client, Window &w,
     }
   }
   return prev;
-}
-
-// Try waiting on an EOF packet
-// NOTE: I don't think we need a separate state for waiting on EOF. I think this
-// logic is the same as waiting on RRs and we can merge the too
-State waitOnEOF(int socket, struct sockaddr_in6 *client, Window &w) {
-  // Handleacks?
 }
 
 int checkArgs(int argc, char *argv[]) {

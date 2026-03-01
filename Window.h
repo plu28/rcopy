@@ -5,9 +5,9 @@ public:
   ~Window();
 
   int getSize() const;
-  int getUpper() const;
-  int getCurrent() const;
-  int getLower() const;
+  pdu getUpper() const;
+  pdu getCurrent() const;
+  pdu getLower() const;
   bool isClosed();
 
   void ack(int ackNum);
