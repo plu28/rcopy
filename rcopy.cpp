@@ -15,10 +15,10 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+#include "Window.h"
 #include "cpe464.h"
 #include "networks.h"
 #include "pollLib.h"
-#include "Window.h"
 
 #define MAX_FILENAMELEN 100
 #define INIT_PAYLOAD_LEN 108
@@ -111,7 +111,7 @@ State establishConnection(int socketNum, sockaddr_in6 *server,
     initPDU.sendTo(socketNum, server);
     if (pollCall(MS_RESEND) > 0) {
       // Received a response
-      int addrLen = 0;
+      int addrLen = sizeof(sockaddr_in6);
       pdu initResponse = pdu(socketNum, server, &addrLen);
 
       // Throw it away if its not good

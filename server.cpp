@@ -143,9 +143,21 @@ State checkFilename(int socket, struct sockaddr_in6 *client,
     // Bad file
     pdu badFilenamePDU = pdu(1, 0, SERVER_INIT);
     badFilenamePDU.sendTo(socket, client);
+    if (DEBUG) {
+      std::cout << "\n\033[91m"
+                << "BAD FILENAME"
+                << "\033[0m\n"
+                << std::endl;
+    }
     return DONE;
   } else {
     // Good file
+    if (DEBUG) {
+      std::cout << "\n\033[92m"
+                << "GOOD FILENAME"
+                << "\033[0m\n"
+                << std::endl;
+    }
     pdu goodFilenamePDU = pdu(0, 0, SERVER_INIT);
     goodFilenamePDU.sendTo(socket, client);
     return SEND_DATA;
@@ -171,6 +183,12 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
     dataPDU.sendTo(socket, client);
     w.pushPacket(dataPDU);
   } else {
+    if (DEBUG) {
+      std::cout << "\n\033[91m"
+                << "REACHED EOF"
+                << "\033[0m\n"
+                << std::endl;
+    }
     // Send eof packet
     pdu eofPDU = pdu(0, w.getCurrent(), EOF_FLAG);
     eofPDU.sendTo(socket, client);
@@ -282,10 +300,12 @@ std::ifstream processInitPDU(pdu &initPDU, uint32_t *bufferSize,
   std::memcpy(&filename[0], initPDU.payload().data() + (2 * sizeof(uint32_t)),
               filenameLen);
 
-  std::cout << "\033[31mWINDOW SIZE: " << *windowSize
-            << " BUFFER SIZE: " << *bufferSize << " FILENAME: " << filename
-            << "\033[0m\n"
-            << std::endl;
+  if (DEBUG) {
+    std::cout << "\033[31mWINDOW SIZE: " << *windowSize
+              << " BUFFER SIZE: " << *bufferSize << " FILENAME: " << filename
+              << "\033[0m\n"
+              << std::endl;
+  }
   std::ifstream file(filename, std::ios::binary);
   return file;
 }
