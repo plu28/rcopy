@@ -172,8 +172,9 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
       return RECV_DATA;
     }
     // This data is our current. Write it to the file
-    outfile.write(reinterpret_cast<const char *>(recvPDU.payload().data()),
-                  recvPDU.payload().size());
+    std::vector<uint8_t> payload = recvPDU.payload();
+    outfile.write(reinterpret_cast<const char *>(payload.data()),
+                  payload.size());
     // Send ack
     w.ack(recvPDU.seq() + 1);
     w.pushPacket(recvPDU); // This moves our current up

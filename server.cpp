@@ -179,7 +179,8 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
   file.read(buffer.data(), bufferSize);
   if (file.gcount() > 0) {
     // Send data packet
-    pdu dataPDU = pdu((uint8_t *)&buffer, file.gcount(), w.getCurrent(), DATA);
+    pdu dataPDU =
+        pdu((uint8_t *)buffer.data(), file.gcount(), w.getCurrent(), DATA);
     dataPDU.sendTo(socket, client);
     w.pushPacket(dataPDU);
   } else {
