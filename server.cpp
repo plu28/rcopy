@@ -23,9 +23,7 @@ enum State {
   FILENAME,
   SEND_DATA,
   WAIT_ON_ACK,
-  TIMEOUT_ON_ACK,
   WAIT_ON_EOF_ACK,
-  TIMEOUT_ON_EOF_ACK,
   DONE,
 };
 static float errRate = 0;
@@ -123,12 +121,8 @@ void processClient(struct sockaddr_in6 *client, pdu &initPDU) {
     case WAIT_ON_ACK:
       state = waitOnAck(socket, client);
       break;
-    case TIMEOUT_ON_ACK:
-      break;
     case WAIT_ON_EOF_ACK:
       state = waitOnEOF(socket, client, *windowPtr);
-      break;
-    case TIMEOUT_ON_EOF_ACK:
       break;
     case DONE:
       break;
