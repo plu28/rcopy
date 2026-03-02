@@ -22,6 +22,7 @@ enum State {
   FILENAME,
   SEND_DATA,
   WAIT_ON_ACK,
+  PREPARE_TO_EOF,
   WAIT_ON_EOF_ACK,
   DONE,
 };
@@ -43,6 +44,7 @@ State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w);
 State waitOnEOF(int socket, struct sockaddr_in6 *client, Window &w);
 State handleAcks(int socketNum, struct sockaddr_in6 *client, Window &w,
                  State prev);
+State prepareToEOF(int socket, struct sockaddr_in6 *client, Window &w);
 
 int main(int argc, char *argv[]) {
   int socketNum = 0;
@@ -121,6 +123,9 @@ void processClient(struct sockaddr_in6 *client, pdu &initPDU) {
     case WAIT_ON_EOF_ACK:
       state = waitOnEOF(socket, client, *windowPtr);
       break;
+    case PREPARE_TO_EOF:
+      state = prepareToEOF(socket, client, *windowPtr);
+      break;
     case DONE:
       break;
     default:
@@ -173,6 +178,10 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
   }
   // Don't send data if the window is closed
   if (w.isClosed()) {
+    if (DEBUG)
+      std::cout << "\033[103m" << "\nWINDOW CLOSED\n"
+                << "\033[0m\n"
+                << std::endl;
     return WAIT_ON_ACK;
   }
   std::vector<char> buffer(bufferSize);
@@ -180,7 +189,7 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
   if (file.gcount() > 0) {
     // Send data packet
     pdu dataPDU =
-        pdu((uint8_t *)buffer.data(), file.gcount(), w.getCurrent(), DATA);
+        pdu((uint8_t *)buffer.data(), file.gcount(), w.getCurrentSeq(), DATA);
     dataPDU.sendTo(socket, client);
     w.pushPacket(dataPDU);
   } else {
@@ -190,11 +199,7 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
                 << "\033[0m\n"
                 << std::endl;
     }
-    // Send eof packet
-    pdu eofPDU = pdu(0, w.getCurrent(), EOF_FLAG);
-    eofPDU.sendTo(socket, client);
-    w.pushPacket(eofPDU);
-    return WAIT_ON_EOF_ACK;
+    return PREPARE_TO_EOF;
   }
 
   // Keep sending data otherwise
@@ -203,11 +208,8 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
 
 // Waiting on rcopy for an ack during usage phase
 State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w) {
+  // Keep sending data if window is open
   if (!w.isClosed()) {
-    if (DEBUG)
-      std::cout << "\033[103m" << "\nWINDOW CLOSED\n"
-                << "\033[0m\n"
-                << std::endl;
     return SEND_DATA;
   }
   for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
@@ -215,7 +217,7 @@ State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w) {
       return handleAcks(socket, client, w, WAIT_ON_ACK);
     } else {
       if (DEBUG)
-        std::cout << "\033[103m"
+        std::cout << "\033[93m"
                   << "\n WE TIMED OUT RESENDING LOWEST: " << w.getLowerSeq()
                   << "\033[0m\n"
                   << std::endl;
@@ -227,10 +229,49 @@ State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w) {
   return DONE;
 }
 
-// NOTE: Should be called by sendData when EOF is read
+// NOTE: Is called by recvData when an EOF is read
+// The only difference between this function and a regular wait
+// is our conditions for leaving are when lower = current - 1 (meaning all sent
+// data ack'd)
+State prepareToEOF(int socket, struct sockaddr_in6 *client, Window &w) {
+
+  while ((w.getCurrentSeq() - 1) < w.getLowerSeq()) {
+    std::cout << "\n\033[91m"
+              << "WAITING ON FINAL ACK LAST DATA SEQ#: "
+              << w.getCurrentSeq() - 1
+              << " LAST ACK'd SEQ#: " << w.getLowerSeq() << "\033[0m\n"
+              << std::endl;
+    for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
+      if (pollCall(MS_RESEND) > 0) {
+        return handleAcks(socket, client, w, PREPARE_TO_EOF);
+      } else {
+        if (DEBUG)
+          std::cout << "\033[93m"
+                    << "\n WE TIMED OUT RESENDING LOWEST: " << w.getLowerSeq()
+                    << "\033[0m\n"
+                    << std::endl;
+        // Resend the lowest packet if timeout
+        w.getLower().sendTo(socket, client);
+        retryCount++;
+      }
+    }
+    return DONE;
+  }
+
+  // Send the EOF
+  pdu eofPDU = pdu(0, w.getCurrentSeq(), EOF_FLAG);
+  eofPDU.sendTo(socket, client);
+  w.pushPacket(eofPDU);
+  return WAIT_ON_EOF_ACK;
+}
+
+// NOTE: Is called by waitOnAllAcks when we've received all RRs
 // The only difference between this function and a regular wait
 // is the timeout handling.
 State waitOnEOF(int socket, struct sockaddr_in6 *client, Window &w) {
+  // We can't send the EOF until all the data has been acknowledged
+  // We need lower to equal current
+
   for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
     if (pollCall(MS_RESEND) > 0) {
       return handleAcks(socket, client, w, WAIT_ON_EOF_ACK);

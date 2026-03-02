@@ -6,7 +6,6 @@ public:
 
   int getSize() const;
   pdu getUpper() const;
-  int getCurrent() const;
   pdu getLast() const; // Get the last sent PDU
   pdu getLower() const;
   int getLowerSeq() const;

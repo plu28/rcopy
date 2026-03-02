@@ -199,7 +199,7 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
                   << " EXPECTED: " << w.getLowerSeq() << "\033[0m\n"
                   << std::endl;
       // Dispatch SREJ FOR ALL MISSED
-      for (int i = w.getCurrent(); i < (int)recvPDU.seq(); i++) {
+      for (int i = w.getCurrentSeq(); i < (int)recvPDU.seq(); i++) {
         // Dont SREJ packets we've got buffered
         if (w.getPacket(i).isValid() && w.getPacket(i).seq() == i) {
           continue;
