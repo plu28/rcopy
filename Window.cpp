@@ -21,8 +21,12 @@ Window::~Window() { return; }
 int Window::getSize() const { return size; }
 pdu Window::getUpper() const { return window[upper % size]; }
 int Window::getCurrent() const { return current; }
-pdu Window::getLower() const { return window[lower % size]; }
+pdu Window::getLower() const {
+  pdu lowerPdu = window[lower % size];
+  return lowerPdu;
+}
 int Window::getLowerSeq() const { return lower; }
+int Window::getCurrentSeq() const { return current; }
 pdu Window::getLast() const { return window[window.size() - 1]; }
 
 // Push a packet to the buffer

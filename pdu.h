@@ -12,6 +12,7 @@
 #define DATA 16
 #define DATA_SREJ 17
 #define DATA_TIMEOUT 18
+#define IS_INVALID 33
 
 #define START_SEQ_NUM 1
 
@@ -24,7 +25,7 @@
 #define PAYLOAD_OFFSET 7
 class pdu {
 public:
-  pdu() = default;
+  pdu(); 
   pdu(int socket, struct sockaddr_in6 *source, int *addrLen);
   pdu(uint8_t *payload, int payloadLen, uint32_t seqNum, uint8_t flag);
   pdu(int payload, uint32_t seqNum, uint8_t flag);
@@ -35,6 +36,7 @@ public:
   std::vector<uint8_t> payload() const;
   std::vector<uint8_t> &buffer();
 
+  bool isValid() const; // Is this pdu initialized?
   int payloadLen() const;
   int PDULen() const;
   std::string payloadStr() const;

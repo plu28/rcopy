@@ -10,6 +10,7 @@ public:
   pdu getLast() const; // Get the last sent PDU
   pdu getLower() const;
   int getLowerSeq() const;
+  int getCurrentSeq() const;
   bool isClosed();
 
   void ack(int ackNum);

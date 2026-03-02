@@ -96,8 +96,6 @@ void processFile() {
 
 State establishConnection(int socketNum, sockaddr_in6 *server,
                           std::ofstream &outfile) {
-  if (DEBUG)
-    std::cout << "\033[95m" << "\n ATTEMPTING TO CONNECT " << std::endl;
   uint8_t payload[INIT_PAYLOAD_LEN];
   // Set the buffer size
   std::memcpy(payload, &cp.bufferSize, sizeof(uint32_t));
@@ -109,6 +107,10 @@ State establishConnection(int socketNum, sockaddr_in6 *server,
   std::memcpy(payload + (2 * sizeof(uint32_t)), cp.fromFile, payloadLen);
 
   for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
+    if (DEBUG)
+      std::cout << "\033[95m" << "\n ATTEMPTING TO CONNECT "
+                << "\033[0m\n"
+                << std::endl;
     pdu initPDU = pdu(payload, payloadLen, 0, CLIENT_INIT);
     initPDU.sendTo(socketNum, server);
     if (pollCall(MS_RESEND) > 0) {
@@ -135,6 +137,26 @@ State establishConnection(int socketNum, sockaddr_in6 *server,
 State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
                Window &w) {
   // The lowest slot in the window points to the data we're missing
+
+  // Check if the seq number of the lower pdu is the seq num we want
+  if ((w.getLower().isValid()) && w.getCurrentSeq() != w.getLowerSeq()) {
+    // TODO: Write all buffered data until we reach data we haven't received
+    while (w.getCurrentSeq() != w.getLowerSeq()) {
+      if (DEBUG)
+        std::cout << "\033[91m" << "\nWRITING DATA FROM BUFFER: SEQ# "
+                  << w.getLower().seq() << "\033[0m\n"
+                  << std::endl;
+      pdu nextDataPDU = w.getLower();
+      std::vector<uint8_t> payload = nextDataPDU.payload();
+      outfile.write(reinterpret_cast<const char *>(payload.data()),
+                    payload.size());
+      w.ack(nextDataPDU.seq() + 1); // Increments our lower
+    }
+    // RR for the next data we haven't received
+    pdu ackPDU(w.getLowerSeq(), seqNum++, RR);
+    ackPDU.sendTo(socket, server);
+  }
+
   // Wait for 10 seconds
   if (pollCall(MS_TERMINATE) > 0) {
     // Receive the data
@@ -197,10 +219,10 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
     std::vector<uint8_t> payload = recvPDU.payload();
     outfile.write(reinterpret_cast<const char *>(payload.data()),
                   payload.size());
-    // Send ack
     w.ack(recvPDU.seq() + 1);
     w.pushPacket(recvPDU); // This moves our current up
     pdu ackPDU(recvPDU.seq() + 1, seqNum++, RR);
+    // Send ack
     ackPDU.sendTo(socket, server);
     return RECV_DATA;
   }

@@ -7,3 +7,5 @@ Initial Filename/Buffer Size Format:
 
 
 A FLAG = 9 (response to filename from server) is good if the payload starts with the integer 0, is bad if it has the integer 1.
+
+I used FLAG = 33 to say this pdu is uninitialized

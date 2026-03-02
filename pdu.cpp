@@ -12,16 +12,22 @@
 #include <vector>
 #define MAX_PDU 1407
 
+// Default PDU is given seq num
+pdu::pdu() {
+  // Set the flag to 33 to signal invalid
+  std::memset(pduBuffer.data() + FLAG_OFFSET, IS_INVALID, sizeof(uint8_t));
+}
+
 // Creating a pdu based on data from a socket
 pdu::pdu(int socket, struct sockaddr_in6 *source, int *addrLen) {
   int recvPDULen = safeRecvfrom(socket, this->pduBuffer.data(), this->PDULen(),
                                 0, (struct sockaddr *)source, addrLen);
   pduBuffer.resize(recvPDULen);
-  if (DEBUG) {
-    printf("RECEIVED A NEW PDU FROM ");
-    printIPInfo(source);
-    std::cout << *this << std::endl;
-  }
+  // if (DEBUG) {
+  //   printf("RECEIVED A NEW PDU FROM ");
+  //   printIPInfo(source);
+  //   std::cout << *this << std::endl;
+  // }
 }
 
 // PDU with a regular payload
@@ -39,10 +45,10 @@ pdu::pdu(uint8_t *payload, int payloadLen, uint32_t seqNum, uint8_t flag) {
 
   uint16_t checksum = in_cksum((uint16_t *)pduBuffer.data(), pduBuffer.size());
   std::memcpy(pduBuffer.data() + CHK_OFFSET, &checksum, sizeof(uint16_t));
-  if (DEBUG)
-    std::cout << "\033[94m" << "\nCREATED PDU WITH REGULAR PAYLOAD\n"
-              << "\033[0m\n"
-              << *this << std::endl;
+  // if (DEBUG)
+  //   std::cout << "\033[94m" << "\nCREATED PDU WITH REGULAR PAYLOAD\n"
+  //             << "\033[0m\n"
+  //             << *this << std::endl;
 }
 // PDU with an integer payload (for SREJ, RR, and init response)
 pdu::pdu(int payload, uint32_t seqNum, uint8_t flag) {
@@ -60,10 +66,10 @@ pdu::pdu(int payload, uint32_t seqNum, uint8_t flag) {
 
   uint16_t checksum = in_cksum((uint16_t *)pduBuffer.data(), pduBuffer.size());
   std::memcpy(pduBuffer.data() + CHK_OFFSET, &checksum, sizeof(uint16_t));
-  if (DEBUG)
-    std::cout << "\033[94m" << "\nCREATED PDU WITH INTEGER PAYLOAD\n"
-              << "\033[0m\n"
-              << *this << std::endl;
+  // if (DEBUG)
+  //   std::cout << "\033[94m" << "\nCREATED PDU WITH INTEGER PAYLOAD\n"
+  //             << "\033[0m\n"
+  //             << *this << std::endl;
 }
 
 // Returns 1 if checksum fails
@@ -74,6 +80,8 @@ int pdu::badChecksum() const {
   }
   return 1;
 }
+
+bool pdu::isValid() const { return this->flag() != IS_INVALID; }
 
 uint32_t pdu::seq() const {
   uint32_t seqNum = 0;
@@ -120,12 +128,12 @@ std::vector<uint8_t> &pdu::buffer() { return pduBuffer; }
 void pdu::resize(int pduLen) { pduBuffer.resize(pduLen); }
 
 int pdu::sendTo(int socketNum, struct sockaddr_in6 *destination) {
-  if (DEBUG) {
-    printf("SENDING PDU TO");
-    printIPInfo(destination);
-    std::cout << *this << std::endl;
-    ;
-  }
+  // if (DEBUG) {
+  //   printf("SENDING PDU TO");
+  //   printIPInfo(destination);
+  //   std::cout << *this << std::endl;
+  //   ;
+  // }
   int addrLen = sizeof(struct sockaddr_in6);
   return safeSendto(socketNum, this->pduBuffer.data(), this->PDULen(), 0,
                     (struct sockaddr *)destination, addrLen);

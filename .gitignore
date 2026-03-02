@@ -1,5 +1,6 @@
 *.DS_Store
 *.jpeg
+*.md
 docs/
 destination
 *.o
