@@ -205,7 +205,7 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
 State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w) {
   if (!w.isClosed()) {
     if (DEBUG)
-      std::cout << "\033[95m" << "\nWINDOW CLOSED\n"
+      std::cout << "\033[103m" << "\nWINDOW CLOSED\n"
                 << "\033[0m\n"
                 << std::endl;
     return SEND_DATA;
@@ -214,6 +214,11 @@ State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w) {
     if (pollCall(MS_RESEND) > 0) {
       return handleAcks(socket, client, w, WAIT_ON_ACK);
     } else {
+      if (DEBUG)
+        std::cout << "\033[103m"
+                  << "\n WE TIMED OUT RESENDING LOWEST: " << w.getLowerSeq()
+                  << "\033[0m\n"
+                  << std::endl;
       // Resend the lowest packet if timeout
       w.getLower().sendTo(socket, client);
       retryCount++;
@@ -251,12 +256,16 @@ State handleAcks(int socket, struct sockaddr_in6 *client, Window &w,
     switch (recvPDU.flag()) {
     case RR:
       if (DEBUG)
-        std::cout << "\033[94m" << "\n ACKING " << recvPDU.payloadInt()
+        std::cout << "\033[94m" << "\n GOT RR " << recvPDU.payloadInt()
                   << "\033[0m\n"
                   << std::endl;
       w.ack(recvPDU.payloadInt());
       break;
     case SREJ:
+      if (DEBUG)
+        std::cout << "\033[94m" << "\n GOT SREJ, RESENDING "
+                  << recvPDU.payloadInt() << "\033[0m\n"
+                  << std::endl;
       w.getPacket(recvPDU.payloadInt()).sendTo(socket, client);
       break;
     case EOF_FLAG:

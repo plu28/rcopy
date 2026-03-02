@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <vector>
-#define DEBUG 0
+#define DEBUG 1
 
 #define RR 5
 #define SREJ 6
@@ -25,7 +25,7 @@
 #define PAYLOAD_OFFSET 7
 class pdu {
 public:
-  pdu(); 
+  pdu();
   pdu(int socket, struct sockaddr_in6 *source, int *addrLen);
   pdu(uint8_t *payload, int payloadLen, uint32_t seqNum, uint8_t flag);
   pdu(int payload, uint32_t seqNum, uint8_t flag);

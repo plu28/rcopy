@@ -1,3 +1,4 @@
+#include "gethostbyname.h"
 #include "pdu.h"
 #include <fcntl.h>
 #include <fstream>
@@ -84,6 +85,7 @@ void processFile() {
     case TIMEOUT:
       printf("Connection timed out\n");
       state = DONE;
+      break;
     default:
       printf("Unexpected state in rcopy. (Something went wrong)\n");
       state = DONE;
@@ -108,18 +110,20 @@ State establishConnection(int socketNum, sockaddr_in6 *server,
 
   for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
     if (DEBUG)
-      std::cout << "\033[95m" << "\n ATTEMPTING TO CONNECT "
-                << "\033[0m\n"
-                << std::endl;
+      std::cout << "\033[95m"
+                << "\n ATTEMPTING TO CONNECT TO ";
+    printIPInfo(server);
+    std::cout << "\033[0m\n" << std::endl;
     pdu initPDU = pdu(payload, payloadLen, 0, CLIENT_INIT);
     initPDU.sendTo(socketNum, server);
     if (pollCall(MS_RESEND) > 0) {
       // Received a response
+      sockaddr_in6 mainServer = *server;
       int addrLen = sizeof(sockaddr_in6);
       pdu initResponse = pdu(socketNum, server, &addrLen);
 
       // Throw it away if its not good
-      if (!initResponse.badChecksum() || initResponse.flag() == SERVER_INIT) {
+      if (!initResponse.badChecksum() && initResponse.flag() == SERVER_INIT) {
         // If the payload had a 1, its a bad filename, if 0, its good
         int badFilename = initResponse.payloadInt();
         if (badFilename) {
@@ -128,6 +132,9 @@ State establishConnection(int socketNum, sockaddr_in6 *server,
         }
         outfile = std::ofstream(cp.toFile, std::ios::binary);
         return RECV_DATA;
+      } else {
+        // Go back to the server if child connection fails
+        *server = mainServer;
       }
     }
   }
@@ -139,18 +146,19 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
   // The lowest slot in the window points to the data we're missing
 
   // Check if the seq number of the lower pdu is the seq num we want
-  if ((w.getLower().isValid()) && w.getCurrentSeq() != w.getLowerSeq()) {
-    // TODO: Write all buffered data until we reach data we haven't received
-    while (w.getCurrentSeq() != w.getLowerSeq()) {
+  // First ensure the pdu in the lowest slot is an initialized object
+  if ((w.getLower().isValid()) && w.getLower().seq() == w.getLowerSeq()) {
+    // Write all buffered data until we reach data we haven't received
+    while (w.getLower().isValid() && w.getLower().seq() == w.getLowerSeq()) {
       if (DEBUG)
-        std::cout << "\033[91m" << "\nWRITING DATA FROM BUFFER: SEQ# "
+        std::cout << "\033[95m" << "\nWRITING DATA FROM BUFFER: SEQ# "
                   << w.getLower().seq() << "\033[0m\n"
                   << std::endl;
       pdu nextDataPDU = w.getLower();
       std::vector<uint8_t> payload = nextDataPDU.payload();
       outfile.write(reinterpret_cast<const char *>(payload.data()),
                     payload.size());
-      w.ack(nextDataPDU.seq() + 1); // Increments our lower
+      w.ack(w.getLowerSeq() + 1); // Increments our lower
     }
     // RR for the next data we haven't received
     pdu ackPDU(w.getLowerSeq(), seqNum++, RR);
@@ -179,11 +187,9 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
         std::cout << "\033[91m" << "\n GOT BAD CHECKSUM"
                   << "\033[0m\n"
                   << std::endl;
-      // Dispatch SREJ,
-      pdu srejPDU = pdu(recvPDU.seq(), seqNum++, SREJ);
+      // Dispatch SREJ
+      pdu srejPDU = pdu(w.getLowerSeq(), seqNum++, SREJ);
       srejPDU.sendTo(socket, server);
-      // Push the data to the buffer for now
-      w.pushPacket(recvPDU);
       return RECV_DATA;
     }
     // Check if we missed a packet
@@ -194,7 +200,11 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
                   << std::endl;
       // Dispatch SREJ FOR ALL MISSED
       for (int i = w.getCurrent(); i < (int)recvPDU.seq(); i++) {
-        pdu srejPDU = pdu(recvPDU.seq(), seqNum++, SREJ);
+        // Dont SREJ packets we've got buffered
+        if (w.getPacket(i).isValid() && w.getPacket(i).seq() == i) {
+          continue;
+        }
+        pdu srejPDU = pdu(i, seqNum++, SREJ);
         srejPDU.sendTo(socket, server);
       }
       // Push the data to the buffer for now
@@ -204,11 +214,12 @@ State recvData(int socket, sockaddr_in6 *server, std::ofstream &outfile,
     // Check if its data we've already received
     if (recvPDU.seq() < (uint32_t)w.getLowerSeq()) {
       if (DEBUG)
-        std::cout << "\033[91m" << "\n GOT SENT REPEAT DATA"
+        std::cout << "\033[91m" << "\n GOT SENT REPEAT DATA: " << recvPDU.seq()
                   << "\033[0m\n"
                   << std::endl;
       // Send the highest possible ack
       pdu ackPDU(w.getLowerSeq(), seqNum++, RR);
+      ackPDU.sendTo(socket, server);
       return RECV_DATA;
     }
     if (DEBUG)
