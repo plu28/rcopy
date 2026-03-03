@@ -10,6 +10,7 @@
 #include <ostream>
 #include <stdint.h>
 #include <vector>
+#include <cstring>
 #define MAX_PDU 1407
 
 // Default PDU is given seq num
@@ -105,7 +106,7 @@ int pdu::PDULen() const { return pduBuffer.size(); }
 
 std::vector<uint8_t> pdu::payload() const {
   std::vector<uint8_t> payload = std::vector<uint8_t>(this->payloadLen());
-  memcpy(payload.data(), pduBuffer.data() + PAYLOAD_OFFSET, payloadLen());
+  std::memcpy(payload.data(), pduBuffer.data() + PAYLOAD_OFFSET, payloadLen());
   return payload;
 }
 

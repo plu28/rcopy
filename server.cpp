@@ -1,12 +1,14 @@
 #include <arpa/inet.h>
+#include <csignal> // or <signal.h>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "Window.h"
@@ -33,8 +35,8 @@ int checkArgs(int argc, char *argv[]);
 
 void processServer(int socketNum);
 void processClient(struct sockaddr_in6 *client, pdu &initPDU);
-std::ifstream processInitPDU(pdu &initPDU, uint32_t *bufferSize,
-                             uint32_t *windowSize);
+void processInitPDU(pdu &initPDU, uint32_t *bufferSize, uint32_t *windowSize,
+                    std::ifstream *stream);
 
 State checkFilename(int socket, struct sockaddr_in6 *client,
                     std::ifstream &file);
@@ -105,7 +107,8 @@ void processClient(struct sockaddr_in6 *client, pdu &initPDU) {
 
   uint32_t bufferSize = 0;
   uint32_t windowSize = 0;
-  std::ifstream file = processInitPDU(initPDU, &bufferSize, &windowSize);
+  std::ifstream file;
+  processInitPDU(initPDU, &bufferSize, &windowSize, &file);
   Window *windowPtr = new Window(windowSize, START_SEQ_NUM);
 
   State state = FILENAME;
@@ -353,8 +356,8 @@ int checkArgs(int argc, char *argv[]) {
 }
 
 // parse an initPDU format into buffersize and a filestream
-std::ifstream processInitPDU(pdu &initPDU, uint32_t *bufferSize,
-                             uint32_t *windowSize) {
+void processInitPDU(pdu &initPDU, uint32_t *bufferSize, uint32_t *windowSize,
+                    std::ifstream *stream) {
   // Copy the buffer size
   std::memcpy(bufferSize, initPDU.payload().data(), sizeof(uint32_t));
 
@@ -375,8 +378,7 @@ std::ifstream processInitPDU(pdu &initPDU, uint32_t *bufferSize,
               << "\033[0m\n"
               << std::endl;
   }
-  std::ifstream file(filename, std::ios::binary);
-  return file;
+  (*stream).open(filename, std::ios::binary);
 }
 
 void handleZombies(int sig) {

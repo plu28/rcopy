@@ -5,7 +5,6 @@
 
 #ifndef __SAFEUTIL_H__
 #define __SAFEUTIL_H__
-
 #ifdef __cplusplus
 extern "C" {
 #endif
