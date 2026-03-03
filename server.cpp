@@ -179,7 +179,7 @@ State sendData(int socket, struct sockaddr_in6 *client, std::ifstream &file,
   // Don't send data if the window is closed
   if (w.isClosed()) {
     if (DEBUG)
-      std::cout << "\033[103m" << "\nWINDOW CLOSED\n"
+      std::cout << "\033[93m" << "\nWINDOW CLOSED\n"
                 << "\033[0m\n"
                 << std::endl;
     return WAIT_ON_ACK;
@@ -235,12 +235,13 @@ State waitOnAck(int socket, struct sockaddr_in6 *client, Window &w) {
 // data ack'd)
 State prepareToEOF(int socket, struct sockaddr_in6 *client, Window &w) {
 
-  while ((w.getCurrentSeq() - 1) < w.getLowerSeq()) {
-    std::cout << "\n\033[91m"
-              << "WAITING ON FINAL ACK LAST DATA SEQ#: "
-              << w.getCurrentSeq() - 1
-              << " LAST ACK'd SEQ#: " << w.getLowerSeq() << "\033[0m\n"
-              << std::endl;
+  while ((w.getCurrentSeq()) != w.getLowerSeq()) {
+    if (DEBUG)
+      std::cout << "\n\033[91m"
+                << "WAITING ON FINAL ACK LAST DATA SEQ#: "
+                << w.getCurrentSeq() - 1
+                << " LAST ACK'd SEQ#: " << w.getLowerSeq() - 1 << "\033[0m\n"
+                << std::endl;
     for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
       if (pollCall(MS_RESEND) > 0) {
         return handleAcks(socket, client, w, PREPARE_TO_EOF);
@@ -269,15 +270,23 @@ State prepareToEOF(int socket, struct sockaddr_in6 *client, Window &w) {
 // The only difference between this function and a regular wait
 // is the timeout handling.
 State waitOnEOF(int socket, struct sockaddr_in6 *client, Window &w) {
-  // We can't send the EOF until all the data has been acknowledged
-  // We need lower to equal current
+  if (DEBUG)
+    std::cout << "\n\033[92m"
+              << "WAITING ON EOF ACK"
+              << "\033[0m\n"
+              << std::endl;
 
   for (int retryCount = 0; retryCount < RETRY_LIM; retryCount++) {
     if (pollCall(MS_RESEND) > 0) {
       return handleAcks(socket, client, w, WAIT_ON_EOF_ACK);
     } else {
+      if (DEBUG)
+        std::cout << "\n\033[92m"
+                  << "TIMED OUT, NO EOF ACK"
+                  << "\033[0m\n"
+                  << std::endl;
       // Resend EOF packet (last sent PDU)
-      w.getLast().sendTo(socket, client);
+      w.getPacket(w.getCurrentSeq() - 1).sendTo(socket, client);
       retryCount++;
     }
   }
